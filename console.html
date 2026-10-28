@@ -448,6 +448,21 @@
     chronosRevelation.forEach(clearTimeout); chronosRevelation = [];
   }
 
+  /* Reprise apres un rechargement en pleine question. Si le PC a plante ou
+     si l'onglet a ete rouvert, la console revient sur une phase « ferme »
+     ou « revelation » alors qu'elle n'a rien dessine : elle a manque la
+     phase de vote, pendant laquelle les cadres sont construits. On rejoue
+     alors la revelation, qui redessine tout et republie les resultats —
+     l'upsert reecrit les memes valeurs, personne ne perd ses points.
+     Le setTimeout casse la recursion : revelation() previent ses abonnes,
+     donc rappelle peindre(), avant d'avoir dessine quoi que ce soit. */
+  var repriseFaite = -1;
+  function reprendreRevelation(qi) {
+    if (repriseFaite === qi) return;
+    repriseFaite = qi;
+    setTimeout(revelation, 0);
+  }
+
   /* ---------- accueil ---------- */
   Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
     b.addEventListener('click', function () {
@@ -1142,10 +1157,8 @@
         break;
 
       case 'ferme':
-        scene('jeu');
-        break;
-
       case 'revelation':
+        if (!document.querySelector('.colonne')) reprendreRevelation(e.questionIndex);
         scene('jeu');
         break;
 
