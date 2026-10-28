@@ -3,7 +3,7 @@ window.CONFIG = {
   /* Adresse publique de telecommande.html une fois le dossier mis en ligne.
      Tant qu'elle est vide, la console propose d'ouvrir la telecommande
      dans un onglet local (mode simulateur). */
-  URL_PUBLIQUE: '',
+  URL_PUBLIQUE: 'https://benjamincharrassierlachal-cyber.github.io/quizz-lachal/telecommande.html',
 
   /* Le chrono. 30 s = la decision du plan de bataille. */
   DUREE_VOTE_MS: 30000,
