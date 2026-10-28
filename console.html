@@ -566,7 +566,6 @@
       '<div class="ressort"></div>' +
       '<div class="panneau case case-annee">' +
         '<div class="annee-valeur attente" id="annee-valeur">? ? ? ?</div>' +
-        '<div class="annee-format"></div>' +
         '<div class="annee-regle"></div>' +
       '</div>' +
       '<div class="case-noms paniers">' +
@@ -574,8 +573,6 @@
         '<div class="panier" data-p="proche"><h4></h4><div class="panier-noms"></div></div>' +
         '<div class="panier" data-p="loin"><h4>À côté</h4><div class="panier-noms"></div></div>' +
       '</div>';
-    col.querySelector('.annee-format').textContent =
-      'Une année à taper sur ton téléphone — par exemple ' + (q.placeholder || '1999');
     col.querySelector('.annee-regle').textContent =
       (q.pointsExact || 2) + ' points dans le mille · ' + (q.pointsProche || 1) +
       ' point à ' + tol + ' ans près';
