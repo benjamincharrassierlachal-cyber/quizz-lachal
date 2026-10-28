@@ -1,0 +1,1217 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le Quizz Lachal — Console</title>
+<link rel="stylesheet" href="js/theme.css">
+<style>
+  body { overflow: hidden; }
+  .scene { position: fixed; inset: 0; display: none; flex-direction: column; }
+  .scene.actif { display: flex; }
+
+  /* le decor, partage par toutes les scenes */
+  .decor { position: absolute; inset: 0; overflow: hidden; z-index: 0; }
+  .decor img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 34%; }
+  .decor.recule img { filter: blur(26px) saturate(.75) brightness(.42); transform: scale(1.14); }
+  .decor .voile { position: absolute; inset: 0;
+    background: radial-gradient(120% 85% at 50% 38%, rgba(4,12,24,0) 44%, rgba(4,12,24,.3) 100%),
+                linear-gradient(to bottom, rgba(4,12,24,0) 62%, rgba(4,12,24,.44) 100%); }
+  .decor.recule .voile { background: linear-gradient(180deg, rgba(6,15,28,.55), rgba(6,15,28,.78)); }
+  .dessus { position: relative; z-index: 1; display: flex; flex-direction: column; flex: 1; }
+
+  /* ---------- 1. accueil ---------- */
+  #accueil .cta-zone { position: absolute; left: 50%; top: 78%; transform: translate(-50%,-50%); }
+  #accueil .cta { font-size: clamp(1.9rem, 3.9vw, 3.3rem); }
+  #accueil .cta::after { content:""; position:absolute; inset:-18px; border-radius:30px; z-index:-1;
+    background: radial-gradient(closest-side, rgba(250,214,120,.42), rgba(250,214,120,0) 72%);
+    animation: halo 3.6s ease-in-out infinite; pointer-events:none; }
+  @keyframes halo { 0%,100%{opacity:.34;transform:scale(.97);} 50%{opacity:.72;transform:scale(1.04);} }
+  .rail { position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%);
+          display: flex; flex-direction: column; align-items: center; gap: 9px; opacity: .72; transition: opacity .25s; }
+  .rail:hover, .rail:focus-within { opacity: 1; }
+  .seg { display: flex; gap: 3px; padding: 4px; border-radius: 11px; background: rgba(9,21,38,.62);
+         border: 1.5px solid rgba(214,176,90,.4); backdrop-filter: blur(7px); }
+  .seg button { font-family: var(--titre); font-size: 1rem; letter-spacing: .1em; padding: 7px 24px 6px;
+                border: none; border-radius: 8px; background: transparent; color: #C9D8E8; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: linear-gradient(180deg, var(--or-clair), var(--or-fonce)); color: #17304F; }
+  .rail-note { font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+               color: rgba(244,238,223,.85); text-shadow: 0 2px 8px rgba(2,8,18,.95); }
+
+  /* ---------- 2. inscription ---------- */
+  .inscr { flex: 1; display: grid; grid-template-columns: 380px 1fr; gap: 40px; padding: 46px 54px; align-items: center; }
+  .inscr-gauche { display: flex; flex-direction: column; gap: 20px; align-items: flex-start; }
+  .titre-jeu { font-family: var(--titre); font-size: clamp(2.2rem,4vw,3.4rem); line-height: 1; color: var(--or); }
+  .titre-jeu span { display: block; color: var(--creme); }
+  #qr { background: #fff; padding: 14px; border-radius: 14px; line-height: 0; box-shadow: 0 14px 40px rgba(0,0,0,.5); }
+  .adresse { font-family: var(--titre); font-size: 1.5rem; color: var(--or-clair); letter-spacing: .02em; word-break: break-all; }
+  .inscr-droite { display: flex; flex-direction: column; gap: 18px; height: 100%; justify-content: center; }
+  .compteur { font-family: var(--titre); font-size: 3rem; color: var(--creme); line-height: 1; }
+  .compteur small { font-family: var(--texte); font-size: .8rem; letter-spacing: .18em; text-transform: uppercase;
+                    color: rgba(244,238,223,.55); display: block; margin-top: 6px; }
+  .pastilles { display: flex; flex-wrap: wrap; gap: 9px; align-content: flex-start; max-height: 44vh; overflow: auto; }
+  .pastille-nom { font-weight: 800; font-size: 1rem; padding: 8px 16px; border-radius: 99px;
+                  background: rgba(28,53,85,.85); border: 1.5px solid rgba(214,176,90,.35); color: var(--creme);
+                  animation: arrive .35s ease both; }
+  @keyframes arrive { from { opacity: 0; transform: translateY(8px) scale(.9); } }
+
+  /* ---------- 3. le jeu ---------- */
+  .barre-haut { display: flex; align-items: center; justify-content: space-between; padding: 22px 44px 0; gap: 24px; }
+  .compte-rebours { font-family: var(--titre); font-size: 4.4rem; line-height: 1; color: var(--or-clair); min-width: 2.4ch; text-align: right; }
+  .compte-rebours.urgence { color: #FF9A85; }
+  .enonce { font-family: var(--texte); font-weight: 700; font-size: clamp(1.7rem, 3.3vw, 3rem);
+            line-height: 1.22; letter-spacing: -.012em; text-align: center;
+            padding: 14px 7vw 24px; color: var(--creme); text-wrap: balance;
+            text-shadow: 0 3px 20px rgba(0,0,0,.8); }
+  /* Les quatre colonnes partagent les MEMES rangees (subgrid) : la rangee du
+     cadre se cale sur la proposition la plus longue, donc les quatre cadres
+     ont toujours exactement la meme hauteur et le meme aplomb. La taille peut
+     changer d'une question a l'autre, jamais d'une case a l'autre. */
+  .cases { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr);
+           grid-template-rows: 1fr auto minmax(0, 1fr); gap: 0 16px;
+           padding: 0 40px 18px; min-height: 0;
+           transition: grid-template-rows .7s cubic-bezier(.22,.9,.3,1); }
+  /* Pendant la question le ressort du haut occupe sa part : les cadres sont
+     centres. A la revelation il se retracte, ils remontent ensemble. */
+  .cases.revele { grid-template-rows: 0fr auto minmax(0, 1fr); }
+  .colonne { display: grid; grid-row: 1 / -1; grid-template-rows: subgrid; min-height: 0; }
+  .ressort { min-height: 0; }
+
+  /* Repli pour un navigateur sans subgrid : chaque colonne gere ses rangees.
+     Les cadres redeviennent independants, mais rien n'est casse. */
+  @supports not (grid-template-rows: subgrid) {
+    .colonne { grid-row: auto; grid-template-rows: 1fr auto minmax(0, 1fr);
+               transition: grid-template-rows .7s cubic-bezier(.22,.9,.3,1); }
+    .cases.revele .colonne { grid-template-rows: 0fr auto minmax(0, 1fr); }
+  }
+
+  /* La lettre reste en haut, la proposition se centre dans la place restante */
+  .case { display: grid; grid-template-rows: auto 1fr; align-items: center;
+          justify-items: stretch; padding: 20px 14px 18px; gap: 10px;
+          transition: opacity .5s ease, filter .5s ease, background .5s ease, border-color .5s ease, box-shadow .5s ease; }
+  .case-lettre { font-family: var(--titre); font-size: 2.1rem; line-height: 1; text-align: center; color: var(--or); }
+  .colonne.juste .case-lettre { color: var(--vert-vif); }
+  .colonne.juste .case { border-color: var(--vert-vif);
+    background: linear-gradient(180deg, #237A46 0%, var(--vert-fond) 100%);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.2), inset 0 -4px 0 rgba(0,0,0,.3),
+                0 0 44px rgba(79,217,138,.45), 0 10px 26px rgba(2,8,18,.55); }
+  .colonne.faux .case { opacity: .34; filter: saturate(.5); }
+  .colonne.faux .case-noms span { color: rgba(244,238,223,.55); }
+  .case-texte { font-weight: 700; font-size: clamp(1rem, 1.5vw, 1.5rem); text-align: center; line-height: 1.28;
+                color: var(--creme); text-wrap: balance; }
+  /* Une proposition qui est un classement s'affiche en liste numerotee */
+  .case-liste { list-style: none; margin: 2px 0 0; padding: 0 4px;
+                display: flex; flex-direction: column; gap: 7px; counter-reset: cl; }
+  .case-liste li { counter-increment: cl; display: grid; grid-template-columns: 1.5em 1fr; gap: 8px;
+                   align-items: baseline; text-align: left; line-height: 1.25;
+                   font-weight: 700; font-size: clamp(.92rem, 1.28vw, 1.28rem); color: var(--creme); }
+  .case-liste li::before { content: counter(cl) "."; font-family: var(--titre); font-size: .92em;
+                           color: var(--or-fonce); text-align: right; }
+  .colonne.juste .case-liste li::before { color: var(--vert-vif); }
+  .case-noms { min-height: 0; overflow: hidden; opacity: 0;
+               display: grid; grid-auto-flow: column;
+               grid-template-rows: repeat(var(--noms-lignes, 12), min-content);
+               grid-auto-columns: 1fr; column-gap: 10px; row-gap: 2px; align-content: start;
+               padding-top: 16px; transition: opacity .45s ease .2s; }
+  .cases.revele .case-noms { opacity: 1; }
+  .case-noms span { font-size: var(--noms-taille, .95rem); line-height: 1.28; font-weight: 700;
+                    text-align: center; color: rgba(244,238,223,.88);
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                    opacity: 0; transform: translateY(6px); animation: monte .28s ease forwards; }
+  @keyframes monte { to { opacity: 1; transform: none; } }
+  /* ---------- question a saisie libre : une annee ---------- */
+  .cases.saisie { grid-template-columns: 1fr; }
+  .case-annee { align-items: center; justify-items: center; text-align: center; gap: 6px; }
+  .annee-valeur { font-family: var(--titre); font-size: clamp(3rem, 8vw, 6.4rem); line-height: 1;
+                  color: var(--or); letter-spacing: .06em; transition: color .5s ease; }
+  .annee-valeur.attente { color: rgba(240,199,90,.3); }
+  .colonne.juste .annee-valeur { color: var(--vert-vif); text-shadow: 0 0 44px rgba(79,217,138,.45); }
+  /* Une fois l'annee devoilee, le rappel du format n'a plus rien a dire. */
+  .colonne.juste .annee-format { display: none; }
+  .annee-format { font-weight: 700; font-size: clamp(.95rem, 1.3vw, 1.2rem); color: rgba(244,238,223,.72); }
+  .annee-regle { font-weight: 800; font-size: clamp(.78rem, 1vw, .95rem); letter-spacing: .08em;
+                 text-transform: uppercase; color: rgba(244,238,223,.45); }
+
+  .paniers { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 0 22px;
+             grid-auto-flow: row !important; align-content: stretch !important; }
+  .panier { display: flex; flex-direction: column; min-height: 0; gap: 8px;
+            border-top: 2px solid rgba(214,176,90,.25); padding-top: 10px; }
+  .panier h4 { margin: 0; font-family: var(--titre); font-size: clamp(1rem, 1.5vw, 1.4rem);
+               text-align: center; letter-spacing: .03em; color: var(--or-fonce); }
+  .panier[data-p="pile"] { border-top-color: var(--vert-vif); }
+  .panier[data-p="pile"] h4 { color: var(--vert-vif); }
+  .panier[data-p="proche"] h4 { color: var(--or-clair); }
+  .panier[data-p="loin"] { opacity: .55; }
+  .panier-noms { min-height: 0; overflow: hidden;
+                 display: grid; grid-auto-flow: column;
+                 grid-template-rows: repeat(var(--noms-lignes, 12), min-content);
+                 grid-auto-columns: 1fr; column-gap: 10px; row-gap: 2px; align-content: start; }
+  .panier-noms span { font-size: var(--noms-taille, .95rem); line-height: 1.28; font-weight: 700;
+                      text-align: center; color: rgba(244,238,223,.9);
+                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                      opacity: 0; transform: translateY(6px); animation: monte .28s ease forwards; }
+  .panier-noms b { color: var(--or-clair); font-weight: 800; }
+
+  .barre-bas { display: flex; align-items: center; justify-content: space-between; padding: 0 44px 26px; gap: 20px; }
+  .info-votes { font-weight: 800; font-size: 1.05rem; color: rgba(244,238,223,.75); }
+  .info-votes b { color: var(--or-clair); font-size: 1.35rem; }
+  .indice { font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: rgba(244,238,223,.4); }
+
+  /* ---------- 4. Top 5 ---------- */
+  .plaque { background: rgba(9,20,36,.9); border: 3px solid var(--or-fonce); border-radius: 20px;
+            padding: 34px 44px; box-shadow: 0 26px 70px rgba(0,0,0,.6); backdrop-filter: blur(10px); }
+  .centre-scene { flex: 1; display: grid; place-items: center; padding: 40px; }
+  .plaque h2 { font-family: var(--titre); font-size: 2.1rem; color: var(--or); margin: 0 0 20px; text-align: center; letter-spacing: .04em; }
+  .ligne { display: grid; grid-template-columns: 54px 1fr auto; gap: 18px; align-items: center;
+           padding: 12px 10px; border-bottom: 1px solid rgba(214,176,90,.15); }
+  .ligne:last-child { border-bottom: none; }
+  .ligne .rg { font-family: var(--titre); font-size: 1.7rem; color: var(--or-fonce); text-align: center; }
+  .ligne.tete .rg { color: var(--or-clair); }
+  .ligne .nm { font-size: 1.4rem; font-weight: 800; }
+  .ligne .pt { font-family: var(--titre); font-size: 1.7rem; color: var(--or-clair); }
+  .ligne .pt small { font-family: var(--texte); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase;
+                     color: rgba(244,238,223,.45); margin-left: 6px; }
+
+  /* ---------- 5. classement final : podium, puis ruban ---------- */
+  .final-dessus { justify-content: center; align-items: center; gap: 30px; padding: 34px 40px 30px; }
+  .podium { display: grid; grid-template-columns: 1fr 1.28fr 1fr; align-items: end;
+            gap: 26px; width: min(1120px, 93vw); }
+  .marche { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+  .marche .nom { font-family: var(--titre); line-height: 1.02; text-align: center; text-wrap: balance;
+                 max-width: 100%; overflow-wrap: anywhere; }
+  .marche .pts { font-weight: 800; font-size: 1.02rem; color: rgba(244,238,223,.66); }
+  .socle { width: 100%; border-radius: 16px 16px 4px 4px; display: grid; place-items: center;
+           border: 3px solid; border-bottom: none; font-family: var(--titre); line-height: 1;
+           box-shadow: inset 0 3px 0 rgba(255,255,255,.4), 0 -6px 34px rgba(0,0,0,.35); }
+  .m1 .nom { font-size: clamp(2.2rem, 4.6vw, 4rem); color: var(--or-clair);
+             text-shadow: 0 0 46px rgba(240,199,90,.5); }
+  .m1 .socle { height: 250px; font-size: 4.6rem; color: #23364F;
+               background: linear-gradient(180deg, #FDF2C8, #F0C75A 45%, #A87E22);
+               border-color: #FFF4CE; }
+  .m2 .nom { font-size: clamp(1.35rem, 2.6vw, 2.2rem); color: #DEE8F4; }
+  .m2 .socle { height: 182px; font-size: 3.2rem; color: #22344F;
+               background: linear-gradient(180deg, #E6EDF6, #B3C1D2 45%, #74839A);
+               border-color: #EFF5FC; }
+  .m3 .nom { font-size: clamp(1.35rem, 2.6vw, 2.2rem); color: #F2CFAC; }
+  .m3 .socle { height: 138px; font-size: 3.2rem; color: #2E1C0E;
+               background: linear-gradient(180deg, #EBC098, #C98D5A 45%, #7C5130);
+               border-color: #F5D5B4; }
+  .marche.vide { visibility: hidden; }
+
+  .ruban { width: min(1320px, 95vw); overflow: hidden; padding: 14px 0;
+           border-top: 1px solid rgba(214,176,90,.22); border-bottom: 1px solid rgba(214,176,90,.22);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+            mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent); }
+  .ruban-piste { display: flex; gap: 34px; width: max-content; will-change: transform; }
+  .jeton { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; font-weight: 800;
+           font-size: 1.24rem; color: rgba(244,238,223,.85); }
+  .jeton .r { font-family: var(--titre); font-size: 1.1rem; color: var(--or-fonce); }
+  .jeton .p { font-family: var(--titre); font-size: 1.14rem; color: var(--or-clair); }
+  .actions { display: flex; gap: 14px; justify-content: center; }
+
+
+  /* ---------- 4bis. l'explication ---------- */
+  .exp-enonce { font-size: clamp(.95rem,1.3vw,1.2rem); font-weight: 700; color: rgba(244,238,223,.62);
+                text-align: center; padding: 0 8vw 14px; text-wrap: balance; }
+  .exp-corps { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; gap: 46px;
+               padding: 0 6vw 14px; align-items: center; }
+  .exp-corps.avec-image { grid-template-columns: 1.05fr .95fr; }
+  .exp-gauche { display: flex; flex-direction: column; gap: 16px; min-height: 0;
+                background: rgba(8,17,30,.74); border: 1px solid rgba(214,176,90,.16);
+                border-radius: 16px; padding: 24px 28px;
+                -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+                box-shadow: 0 18px 50px rgba(2,8,18,.5); }
+  .exp-corps:not(.avec-image) .exp-gauche { max-width: 1080px; margin: 0 auto; width: 100%; }
+  /* La bonne reponse vient d'etre montree en vert : on ne la repete pas ici. */
+  #exp-reponse { display: none; }
+  .exp-bonne { display: flex; align-items: center; gap: 16px; padding: 12px 22px; border-radius: 14px;
+               align-self: flex-start; max-width: 100%;
+               background: linear-gradient(180deg, #237A46 0%, var(--vert-fond) 100%);
+               border: 2px solid var(--vert-vif); box-shadow: 0 0 30px rgba(79,217,138,.28); }
+  .exp-lettre { font-family: var(--titre); font-size: 1.9rem; color: var(--vert-vif); line-height: 1; min-width: 1.2em; }
+  .exp-prop { font-size: clamp(1rem,1.5vw,1.4rem); font-weight: 800; color: #EAF7EF; line-height: 1.25; }
+  .exp-titre { font-family: var(--titre); font-size: clamp(1.8rem,3.4vw,3rem); color: var(--or-clair);
+               margin: 0; line-height: 1.05; letter-spacing: .01em;
+               text-shadow: 0 2px 0 rgba(0,0,0,.5), 0 0 34px rgba(240,199,90,.22); }
+  .exp-texte { font-size: clamp(1.05rem,1.55vw,1.45rem); font-weight: 700; line-height: 1.5;
+               color: rgba(244,238,223,.94); margin: 0; max-width: 60ch; }
+  .exp-liste { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px;
+               overflow: auto; min-height: 0; }
+  .exp-liste li { position: relative; padding-left: 22px; font-size: clamp(.98rem,1.35vw,1.24rem);
+                  line-height: 1.45; color: rgba(244,238,223,.9); }
+  .exp-liste li::before { content: ""; position: absolute; left: 4px; top: .62em; width: 7px; height: 7px;
+                          border-radius: 50%; background: var(--or-fonce); }
+  .exp-droite { display: grid; place-items: center; min-height: 0; }
+  .exp-droite img { width: 100%; height: auto; max-height: 66vh; object-fit: contain; border-radius: 14px;
+                    border: 3px solid var(--or-fonce); box-shadow: 0 18px 48px rgba(0,0,0,.6); background: #0F1B2C; }
+  /* Illustration seule, quand une planche dessinee porte deja tout le message */
+  .exp-corps.image-pleine { grid-template-columns: 1fr; }
+  .exp-corps.image-pleine .exp-gauche { display: none; }
+  .exp-corps.image-pleine .exp-droite { width: 100%; }
+  .exp-corps.image-pleine .exp-droite img { width: 100%; max-width: 1560px; max-height: 78vh; }
+
+  /* Le defilement : lisible au depart, puis emballe */
+  .exp-defile { display: none; position: relative; min-height: 0; }
+  .exp-corps.defilement { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr);
+                          align-items: stretch; gap: 20px; }
+  .exp-corps.defilement .exp-droite { display: none; }
+  .exp-corps.defilement .exp-defile { display: block; }
+  .exp-defile-boite { position: absolute; inset: 0; overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 16%, #000 76%, transparent);
+            mask-image: linear-gradient(180deg, transparent, #000 16%, #000 76%, transparent); }
+  .exp-defile-piste { display: flex; flex-direction: column; gap: 7px; align-items: center;
+                      will-change: transform; }
+  .exp-defile-piste span { font-weight: 800; font-size: clamp(1.05rem, 1.75vw, 1.55rem);
+                           color: rgba(244,238,223,.92); white-space: nowrap; line-height: 1.2; }
+  .exp-defile-fin { position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
+                    opacity: 0; transition: opacity .55s ease; pointer-events: none;
+                    background: radial-gradient(closest-side, rgba(9,18,32,.94), rgba(9,18,32,.6) 65%, rgba(9,18,32,0)); }
+  .exp-defile-fin.on { opacity: 1; }
+  .exp-defile-fin b { font-family: var(--titre); font-size: clamp(4rem, 12vw, 9.5rem); color: var(--or-clair);
+                      line-height: .88; display: block; text-shadow: 0 0 70px rgba(240,199,90,.5); }
+  .exp-defile-fin i { font-family: var(--titre); font-style: normal; font-size: clamp(1.2rem, 2.6vw, 2.2rem);
+                      color: var(--or); letter-spacing: .07em; }
+
+  .badge-alerte { color: #F2C15C !important; border: 1px solid rgba(242,193,92,.45);
+                  border-radius: 99px; padding: 4px 12px; }
+
+  #confettis-mur { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
+</style>
+</head>
+<body>
+
+<canvas id="confettis-mur"></canvas>
+
+<!-- ============ 1. ACCUEIL ============ -->
+<section class="scene actif" id="accueil">
+  <div class="decor"><img src="assets/fond.jpg" alt="Le Quizz Lachal"><div class="voile"></div></div>
+  <div class="dessus">
+    <div class="cta-zone">
+      <button class="bouton-or cta" id="btn-commencer" type="button">COMMENCER</button>
+    </div>
+    <div class="rail">
+      <div class="seg" role="group" aria-label="Choix du questionnaire">
+        <button type="button" data-s="s1" aria-pressed="true">S1</button>
+        <button type="button" data-s="s2" aria-pressed="false">S2</button>
+      </div>
+      <div class="rail-note" id="rail-note">5 questions</div>
+      <button class="bouton-sobre cache" id="btn-voir-journee" type="button">Classement de la journée</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2. INSCRIPTION ============ -->
+<section class="scene" id="inscription">
+  <div class="decor recule"><img src="assets/fond.jpg" alt=""><div class="voile"></div></div>
+  <div class="dessus">
+    <div class="inscr">
+      <div class="inscr-gauche">
+        <div class="titre-jeu">Le Quizz<span>Lachal</span></div>
+        <div id="qr"></div>
+        <div class="adresse" id="adresse"></div>
+        <div class="eyebrow" id="aide-locale"></div>
+      </div>
+      <div class="inscr-droite">
+        <div class="compteur"><span id="nb-joueurs">0</span> <small>joueurs connectés</small></div>
+        <div class="pastilles" id="liste-joueurs"></div>
+        <div class="actions" style="justify-content:flex-start">
+          <button class="bouton-or" id="btn-lancer" style="font-size:1.4rem" type="button" disabled>LANCER LA PARTIE</button>
+          <button class="bouton-sobre" id="btn-annuler" type="button">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. LE JEU ============ -->
+<section class="scene" id="jeu">
+  <div class="decor recule"><img src="assets/fond.jpg" alt=""><div class="voile"></div></div>
+  <div class="dessus">
+    <div class="barre-haut">
+      <div class="eyebrow" id="progression">Question 1 / 5</div>
+      <div class="compte-rebours chiffres" id="rebours">30</div>
+    </div>
+    <div class="enonce" id="enonce"></div>
+    <div class="cases" id="cases"></div>
+    <div class="barre-bas">
+      <div class="info-votes" id="info-votes"></div>
+      <div style="display:flex;gap:14px;align-items:center">
+        <span class="indice" id="indice">Espace = GO</span>
+        <button class="bouton-or" id="btn-go" style="font-size:1.5rem" type="button">GO</button>
+        <button class="bouton-or cache" id="btn-explication" style="font-size:1.35rem" type="button">EXPLICATION</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. TOP 5 ============ -->
+<section class="scene" id="top">
+  <div class="decor recule"><img src="assets/fond.jpg" alt=""><div class="voile"></div></div>
+  <div class="dessus centre-scene">
+    <div class="plaque" style="width:min(700px,90vw)">
+      <h2>Classement</h2>
+      <div id="liste-top"></div>
+      <div class="actions" style="margin-top:24px">
+        <button class="bouton-or" id="btn-suivant" style="font-size:1.4rem" type="button">QUESTION SUIVANTE</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4bis. EXPLICATION ============ -->
+<section class="scene" id="explication">
+  <div class="decor recule"><img src="assets/fond.jpg" alt=""><div class="voile"></div></div>
+  <div class="dessus">
+    <div class="barre-haut">
+      <div class="eyebrow" id="exp-progression"></div>
+      <div class="eyebrow" id="exp-badge"></div>
+    </div>
+    <div class="exp-enonce" id="exp-enonce"></div>
+    <div class="exp-corps" id="exp-corps">
+      <div class="exp-gauche">
+        <div id="exp-reponse"></div>
+        <h2 class="exp-titre" id="exp-titre"></h2>
+        <p class="exp-texte" id="exp-texte"></p>
+        <ul class="exp-liste" id="exp-liste"></ul>
+      </div>
+      <div class="exp-droite" id="exp-droite"><img id="exp-image" alt=""></div>
+      <div class="exp-defile" id="exp-defile">
+        <div class="exp-defile-boite"><div class="exp-defile-piste" id="exp-defile-piste"></div></div>
+        <div class="exp-defile-fin" id="exp-defile-fin"><b id="exp-defile-nb"></b><i id="exp-defile-mot"></i></div>
+      </div>
+    </div>
+    <div class="barre-bas">
+      <span class="indice">Espace = classement</span>
+      <button class="bouton-or" id="btn-vers-top" style="font-size:1.35rem" type="button">CLASSEMENT</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5. CLASSEMENT FINAL ============ -->
+<section class="scene" id="final">
+  <div class="decor recule"><img src="assets/fond.jpg" alt=""><div class="voile"></div></div>
+  <div class="dessus final-dessus">
+    <div class="eyebrow" id="final-titre" style="text-align:center; font-size:.9rem; letter-spacing:.3em">Classement final</div>
+    <div class="podium" id="podium"></div>
+    <div class="ruban" id="ruban"><div class="ruban-piste" id="ruban-piste"></div></div>
+    <div class="actions">
+      <button class="bouton-or" id="btn-accueil" style="font-size:1.3rem" type="button">RETOUR À L'ACCUEIL</button>
+      <button class="bouton-sobre cache" id="btn-journee" type="button">Classement de la journée</button>
+      <button class="bouton-sobre cache" id="btn-exporter" type="button">Exporter</button>
+      <button class="bouton-sobre cache" id="btn-vider-journee" type="button">Vider la journée</button>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/bareme.js"></script>
+<script src="js/transport.js"></script>
+<script src="js/transport-supabase.js"></script>
+<script src="questions/s1.js"></script>
+<script src="questions/maladies.js"></script>
+<script src="questions/s2.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var scenes = ['accueil', 'inscription', 'jeu', 'explication', 'top', 'final'];
+  function scene(id) { scenes.forEach(function (s) { $(s).classList.toggle('actif', s === id); }); }
+
+  var cleChoisie = 's1';
+  var questionnaire = null;
+  var minuteur = null;
+  var chronosRevelation = [];
+  var animDefile = null, chronoDefile = null, animRuban = null;
+  var fermetureLancee = false;
+  /* Le compte a rebours est mesure localement, des l'arrivee de la phase
+     « vote ». Les POINTS, eux, se calculent sur l'horloge du serveur : c'est
+     le transport qui s'en charge. Les deux sont separes expres — un chrono
+     d'affichage n'a pas besoin d'etre arbitre. */
+  var departLocal = 0;
+
+  /* Typographie francaise : evite qu'un « ? » se retrouve seul en debut de ligne
+     quand un enonce passe a la ligne sur le mur. */
+  function fr(t) {
+    return String(t == null ? '' : t)
+      .replace(/ ([?!;:])/g, '\u202F$1')
+      .replace(/« /g, '\u00AB\u202F')
+      .replace(/ »/g, '\u202F\u00BB');
+  }
+
+  function qCourante() {
+    var e = Transport.etat();
+    return (questionnaire && questionnaire.questions[e.questionIndex]) || null;
+  }
+  function annulerRevelation() {
+    chronosRevelation.forEach(clearTimeout); chronosRevelation = [];
+  }
+
+  /* ---------- accueil ---------- */
+  Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (b) {
+    b.addEventListener('click', function () {
+      cleChoisie = b.dataset.s;
+      Array.prototype.forEach.call(document.querySelectorAll('.seg button'), function (x) {
+        x.setAttribute('aria-pressed', x.dataset.s === cleChoisie ? 'true' : 'false');
+      });
+      $('rail-note').textContent = QUESTIONNAIRES[cleChoisie].questions.length + ' questions';
+    });
+  });
+
+  $('btn-commencer').addEventListener('click', function () {
+    var q = QUESTIONNAIRES[cleChoisie];
+    var erreurs = QL.verifierQuestionnaire(q);
+    if (erreurs.length) {
+      alert('Le questionnaire ' + cleChoisie.toUpperCase() + ' comporte des erreurs :\n\n' + erreurs.join('\n'));
+      return;
+    }
+    var manquantes = [];
+    q.questions.forEach(function (item, i) {
+      if (!item.explication) manquantes.push('Q' + (i + 1) + ' : aucune explication');
+      else if (item.explication.aCompleter) manquantes.push('Q' + (i + 1) + ' : explication à compléter');
+    });
+    if (manquantes.length && !confirm('Explications incomplètes :\n\n' + manquantes.join('\n') +
+        '\n\nElles s’afficheront telles quelles au mur. Lancer quand même ?')) return;
+    questionnaire = q;
+    Transport.creerPartie(cleChoisie, q.questions.length, q.titre);
+  });
+
+  /* ---------- inscription ---------- */
+  function preparerInscription() {
+    var url = (CONFIG.URL_PUBLIQUE || '').trim();
+    $('qr').innerHTML = '';
+    if (url) {
+      $('adresse').textContent = url.replace(/^https?:\/\//, '');
+      $('aide-locale').textContent = 'Scanne le code ou tape l’adresse';
+      if (window.QRCode) {
+        try { new QRCode($('qr'), { text: url, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M }); }
+        catch (e) { $('qr').style.display = 'none'; }
+      } else { $('qr').style.display = 'none'; }
+    } else {
+      $('qr').style.display = 'none';
+      $('adresse').textContent = 'Mode simulateur';
+      $('aide-locale').innerHTML = 'Ouvre <b>telecommande.html</b> dans un ou plusieurs autres onglets pour jouer les téléphones.<br>Renseigne URL_PUBLIQUE dans js/config.js pour afficher le QR code.';
+    }
+  }
+
+  /* On annonce aux telephones le TYPE de la question (jamais la reponse) :
+     c'est ce qui leur permet d'afficher un pave numerique au lieu des 4 cases. */
+  function allerQuestion(i) {
+    var q = questionnaire && questionnaire.questions[i];
+    Transport.majEtat({
+      phase: 'lecture',
+      questionIndex: i,
+      typeQuestion: (q && q.type) || 'qcm',
+      formatSaisie: (q && q.placeholder) || ''
+    });
+  }
+
+  $('btn-lancer').addEventListener('click', function () { allerQuestion(0); });
+  $('btn-annuler').addEventListener('click', function () {
+    if (confirm('Annuler la partie et revenir à l’accueil ?')) Transport.reinitialiser();
+  });
+
+  /* ---------- le jeu ---------- */
+  /* Un texte simple, ou une liste numerotee pour les questions de classement. */
+  function remplirProposition(hote, prop) {
+    hote.innerHTML = '';
+    if (Array.isArray(prop)) {
+      var ol = document.createElement('ol');
+      ol.className = 'case-liste';
+      prop.forEach(function (ligne) {
+        var li = document.createElement('li');
+        li.innerHTML = '<span></span>';
+        li.querySelector('span').textContent = fr(ligne);
+        ol.appendChild(li);
+      });
+      hote.appendChild(ol);
+    } else {
+      hote.textContent = fr(prop);
+    }
+  }
+
+  function dessinerCases() {
+    var q = qCourante();
+    if (!q) return;
+    $('cases').classList.remove('revele');
+    $('cases').innerHTML = '';
+
+    if (q.type === 'annee') { dessinerSaisie(q); return; }
+
+    $('cases').classList.remove('saisie');
+    QL.LETTRES.forEach(function (lettre, i) {
+      var col = document.createElement('div');
+      col.className = 'colonne';
+      col.dataset.lettre = lettre;
+      col.innerHTML = '<div class="ressort"></div>' +
+                      '<div class="panneau case">' +
+                        '<div class="case-lettre">' + lettre + '</div>' +
+                        '<div class="case-texte"></div>' +
+                      '</div>' +
+                      '<div class="case-noms"></div>';
+      remplirProposition(col.querySelector('.case-texte'), q.propositions[i]);
+      $('cases').appendChild(col);
+    });
+  }
+
+  /* Une seule grande case au centre : le format attendu, puis la reponse. */
+  function dessinerSaisie(q) {
+    $('cases').classList.add('saisie');
+    var tol = q.tolerance || 0;
+    var col = document.createElement('div');
+    col.className = 'colonne';
+    col.dataset.lettre = '';
+    col.innerHTML =
+      '<div class="ressort"></div>' +
+      '<div class="panneau case case-annee">' +
+        '<div class="annee-valeur attente" id="annee-valeur">? ? ? ?</div>' +
+        '<div class="annee-format"></div>' +
+        '<div class="annee-regle"></div>' +
+      '</div>' +
+      '<div class="case-noms paniers">' +
+        '<div class="panier" data-p="pile"><h4>Dans le mille</h4><div class="panier-noms"></div></div>' +
+        '<div class="panier" data-p="proche"><h4></h4><div class="panier-noms"></div></div>' +
+        '<div class="panier" data-p="loin"><h4>À côté</h4><div class="panier-noms"></div></div>' +
+      '</div>';
+    col.querySelector('.annee-format').textContent =
+      'Une année à taper sur ton téléphone — par exemple ' + (q.placeholder || '1999');
+    col.querySelector('.annee-regle').textContent =
+      (q.pointsExact || 2) + ' points dans le mille · ' + (q.pointsProche || 1) +
+      ' point à ' + tol + ' ans près';
+    col.querySelector('.panier[data-p="proche"] h4').textContent = 'À ' + tol + ' ans près';
+    $('cases').appendChild(col);
+  }
+
+  function majEnonce() {
+    var e = Transport.etat(), q = qCourante();
+    if (!q) return;
+    $('progression').textContent = 'Question ' + (e.questionIndex + 1) + ' / ' + e.nbQuestions;
+    $('enonce').textContent = fr(q.enonce);
+  }
+
+  $('btn-go').addEventListener('click', lancerVote);
+  function lancerVote() {
+    if (Transport.etat().phase !== 'lecture') return;
+    departLocal = Date.now();
+    Transport.majEtat({ phase: 'vote', departA: Date.now() });
+  }
+
+  function tick() {
+    var e = Transport.etat();
+    if (e.phase !== 'vote') return;
+    if (!departLocal) departLocal = Date.now();
+    var reste = Math.max(0, CONFIG.DUREE_VOTE_MS - (Date.now() - departLocal));
+    var s = Math.ceil(reste / 1000);
+    $('rebours').textContent = s;
+    $('rebours').classList.toggle('urgence', s <= 10);
+    var n = Transport.votes(e.questionIndex).length;
+    var total = Transport.joueurs().length;
+    if (total > 0 && n >= total) {
+      $('info-votes').innerHTML = '<b>Tout le monde a répondu</b>';
+      $('rebours').classList.remove('urgence');
+      // un souffle pour que le dernier voie son écran se verrouiller
+      if (!fermetureLancee) { fermetureLancee = true; setTimeout(fermer, 900); }
+      return;
+    }
+    $('info-votes').innerHTML = '<b>' + n + '</b> / ' + total + ' ont répondu';
+    if (reste <= 0) { fermer(); }
+  }
+
+  function fermer() {
+    fermetureLancee = true;
+    if (Transport.etat().phase !== 'vote') return;   // deja ferme
+    clearInterval(minuteur); minuteur = null;
+    Transport.majEtat({ phase: 'ferme' });
+    // on laisse une seconde aux validations d'office des telephones
+    setTimeout(revelation, 1100);
+  }
+
+  function revelation() {
+    var e = Transport.etat(), q = qCourante();
+    if (!q) return;
+    Transport.majEtat({ phase: 'revelation' });
+    dessinerCases();
+    majEnonce();
+    $('btn-go').classList.add('cache');
+    $('btn-explication').classList.add('cache');
+    $('indice').textContent = '';
+    $('rebours').textContent = '';
+    $('rebours').classList.remove('urgence');
+
+    var votes = Transport.votes(e.questionIndex);
+    var ordre = QL.ordreRevelation(votes);
+    var estAnnee = q.type === 'annee';
+
+    // la colonne (ou le panier) le plus charge decide de la taille des noms
+    if (estAnnee) {
+      var parPanier = { pile: 0, proche: 0, loin: 0 };
+      ordre.montent.forEach(function (v) { parPanier[panierDe(v.cases[0], q)]++; });
+      calibrerNoms(Math.max(parPanier.pile, parPanier.proche, parPanier.loin), 56);
+    } else {
+      var parLettre = { A: 0, B: 0, C: 0, D: 0 };
+      ordre.montent.forEach(function (v) {
+        v.cases.forEach(function (L) { if (parLettre[L] !== undefined) parLettre[L]++; });
+      });
+      calibrerNoms(Math.max(parLettre.A, parLettre.B, parLettre.C, parLettre.D));
+    }
+    // les cadres remontent, les noms vont pouvoir se ranger dessous
+    $('cases').classList.add('revele');
+
+    // la montee s'accelere pour tenir dans l'enveloppe, quel que soit le nombre
+    var cadence = Math.min(
+      CONFIG.CADENCE_NOMS_MS,
+      Math.max(45, (CONFIG.MONTEE_MAX_MS || 5500) / Math.max(ordre.montent.length, 1))
+    );
+
+    ordre.montent.forEach(function (v, i) {
+      chronosRevelation.push(setTimeout(function () {
+        if (estAnnee) {
+          var p = document.querySelector('.panier[data-p="' + panierDe(v.cases[0], q) + '"] .panier-noms');
+          if (!p) return;
+          var s = document.createElement('span');
+          s.appendChild(document.createTextNode(v.nom + ' — '));
+          var b = document.createElement('b');
+          b.textContent = v.cases[0];
+          s.appendChild(b);
+          p.appendChild(s);
+          return;
+        }
+        v.cases.forEach(function (lettre) {
+          var col = document.querySelector('.colonne[data-lettre="' + lettre + '"] .case-noms');
+          if (!col) return;
+          var s = document.createElement('span');
+          s.textContent = v.nom;
+          col.appendChild(s);
+        });
+      }, i * cadence + 300));
+    });
+
+    var apres = ordre.montent.length * cadence + 900;
+    $('info-votes').textContent = ordre.sansReponse
+      ? ordre.sansReponse + ' sans réponse'
+      : 'Tout le monde a répondu';
+
+    // le vert
+    chronosRevelation.push(setTimeout(function () {
+      if (estAnnee) {
+        var colA = document.querySelector('.colonne');
+        if (colA) colA.classList.add('juste');
+        var val = $('annee-valeur');
+        if (val) { val.textContent = q.reponse; val.classList.remove('attente'); }
+        var cp = { pile: 0, proche: 0 };
+        ordre.montent.forEach(function (v) {
+          var b = panierDe(v.cases[0], q);
+          if (cp[b] !== undefined) cp[b]++;
+        });
+        $('info-votes').innerHTML = '<b>' + cp.pile + '</b> dans le mille · <b>' +
+          cp.proche + '</b> à ' + (q.tolerance || 0) + ' ans près';
+      } else {
+        Array.prototype.forEach.call(document.querySelectorAll('.colonne'), function (c) {
+          c.classList.add(q.bonnes.indexOf(c.dataset.lettre) !== -1 ? 'juste' : 'faux');
+        });
+        $('info-votes').innerHTML = q.nonNotee
+          ? '<b>Question bonus</b> — aucun point en jeu'
+          : '<b>' + q.bonnes.length + '</b> bonne' + (q.bonnes.length > 1 ? 's' : '') + ' réponse' + (q.bonnes.length > 1 ? 's' : '');
+      }
+
+      // les telephones reagissent maintenant, pas avant
+      var map = {};
+      var parJoueur = {};
+      votes.forEach(function (v) { parJoueur[v.joueurId] = v.cases; });
+      Transport.joueurs().forEach(function (j) {
+        map[j.id] = QL.etatPourQuestion(q, parJoueur[j.id] || []);
+      });
+      Transport.publierResultats(e.questionIndex, map);
+
+      // la main revient au maitre du jeu : rien n'avance sans lui
+      var b = $('btn-explication');
+      b.textContent = q.explication ? 'EXPLICATION' : 'CLASSEMENT';
+      b.classList.remove('cache');
+      $('indice').textContent = q.explication ? 'Espace = explication' : 'Espace = classement';
+    }, apres));
+  }
+
+  /* Adapte la taille et le nombre de sous-colonnes des noms au remplissage
+     reel de la colonne la plus chargee. A 60 joueurs dont 40 sur la meme case,
+     les noms retrecissent et passent sur deux colonnes au lieu de disparaitre. */
+  function calibrerNoms(maxColonne, reserve) {
+    var colonne = document.querySelector('.colonne');
+    if (!colonne) return;
+    // hauteur disponible sous le cadre une fois qu'il sera remonte
+    var cadre = colonne.querySelector('.case').getBoundingClientRect().height;
+    var h = Math.max(90, $('cases').clientHeight - cadre - 22 - (reserve || 0));
+    var taille = 26, lignes, colonnes;   // on part grand et on retrecit si besoin
+    while (true) {
+      lignes = Math.max(1, Math.floor(h / (taille * 1.32 + 1)));
+      colonnes = Math.ceil(maxColonne / lignes);
+      if (colonnes <= 2 || taille <= 10) break;
+      taille -= 1;
+    }
+    colonnes = Math.min(colonnes, 3);
+    lignes = Math.max(1, Math.ceil(maxColonne / colonnes));
+    $('cases').style.setProperty('--noms-lignes', lignes);
+    $('cases').style.setProperty('--noms-taille', taille + 'px');
+  }
+
+  /* Dans quel panier tombe une annee tapee par un joueur. */
+  function panierDe(saisie, q) {
+    var r = QL.etatAnnee(saisie, q);
+    if (r.ecart === 0) return 'pile';
+    return r.points > 0 ? 'proche' : 'loin';
+  }
+
+  /* ---------- l'explication ---------- */
+  function afficherExplication() {
+    var e = Transport.etat(), q = qCourante();
+    if (!q) return;
+    var x = q.explication || {};
+
+    $('exp-progression').textContent = 'Question ' + (e.questionIndex + 1) + ' / ' + e.nbQuestions;
+    $('exp-badge').textContent = x.aCompleter ? 'à compléter' : (q.nonNotee ? 'question bonus' : '');
+    $('exp-badge').classList.toggle('badge-alerte', !!x.aCompleter);
+    $('exp-enonce').textContent = fr(q.enonce);
+
+    var rep = $('exp-reponse');
+    rep.innerHTML = '';
+    (q.bonnes || []).forEach(function (L) {
+      var d = document.createElement('div');
+      d.className = 'exp-bonne';
+      d.innerHTML = '<span class="exp-lettre"></span><span class="exp-prop"></span>';
+      d.querySelector('.exp-lettre').textContent = L;
+      d.querySelector('.exp-prop').textContent = fr(QL.texteProposition(q.propositions[QL.LETTRES.indexOf(L)]));
+      rep.appendChild(d);
+    });
+
+    $('exp-titre').textContent = fr(x.titre || '');
+    $('exp-titre').classList.toggle('cache', !x.titre);
+    $('exp-texte').textContent = fr(x.texte || '');
+    $('exp-texte').classList.toggle('cache', !x.texte);
+
+    var ul = $('exp-liste');
+    ul.innerHTML = '';
+    (x.liste || []).forEach(function (l) {
+      var li = document.createElement('li');
+      li.textContent = fr(l);
+      ul.appendChild(li);
+    });
+    ul.classList.toggle('cache', !(x.liste && x.liste.length));
+
+    if (x.image) {
+      $('exp-image').src = x.image;
+      $('exp-droite').classList.remove('cache');
+      $('exp-corps').classList.add('avec-image');
+    } else {
+      $('exp-image').removeAttribute('src');
+      $('exp-droite').classList.add('cache');
+      $('exp-corps').classList.remove('avec-image');
+    }
+    // une planche dessinee qui porte tout le message, sans panneau de texte
+    $('exp-corps').classList.toggle('image-pleine', !!(x.image && x.imagePleine));
+
+    lancerDefilement(x);
+  }
+
+  /* Le defilement : la liste passe lentement au debut, assez pour qu'on lise
+     quelques noms, puis s'emballe. Quatre secondes, puis le total tombe. */
+  function arreterDefilement() {
+    if (animDefile) { animDefile.cancel(); animDefile = null; }
+    clearTimeout(chronoDefile);
+    $('exp-defile-fin').classList.remove('on');
+  }
+
+  function lancerDefilement(x) {
+    arreterDefilement();
+    var actif = !!(x.defilement && x.defilement.length);
+    $('exp-corps').classList.toggle('defilement', actif);
+    if (!actif) return;
+
+    var piste = $('exp-defile-piste');
+    piste.innerHTML = '';
+    x.defilement.forEach(function (m) {
+      var el = document.createElement('span');
+      el.textContent = m;
+      piste.appendChild(el);
+    });
+    $('exp-defile-nb').textContent = x.defilement.length;
+    $('exp-defile-mot').textContent = x.defilementMot || '';
+
+    requestAnimationFrame(function () {
+      var boite = $('exp-defile').querySelector('.exp-defile-boite');
+      var h = boite.clientHeight || 320;
+      var duree = CONFIG.DEFILEMENT_MS || 4000;
+      var depart = h * 0.34;                                     // la liste entre par le bas
+      var arrivee = -Math.max(0, piste.scrollHeight - h * 0.30);  // et sort par le haut
+
+      /* Deux temps. D'abord les premieres entrees passent a vitesse constante,
+         assez lentement pour qu'on les lise. Puis le reste s'emballe, en
+         repartant exactement a la vitesse de la phase lente : pas de a-coup
+         a la jonction. */
+      var parEntree = piste.scrollHeight / Math.max(1, x.defilement.length);
+      var partLente = Math.min(0.8, Math.max(0.05, CONFIG.DEFILEMENT_PART_LENTE || 0.42));
+      var lentes = Math.max(1, CONFIG.DEFILEMENT_LENTES || 5);
+      var course = Math.min(parEntree * lentes, Math.abs(arrivee - depart) * 0.5);
+
+      animDefile = piste.animate([
+        { transform: 'translateY(' + depart + 'px)', offset: 0, easing: 'linear' },
+        { transform: 'translateY(' + (depart - course) + 'px)', offset: partLente,
+          easing: 'cubic-bezier(.6,.05,.85,.55)' },
+        { transform: 'translateY(' + arrivee + 'px)', offset: 1 }
+      ], { duration: duree, fill: 'forwards' });
+
+      chronoDefile = setTimeout(function () {
+        $('exp-defile-fin').classList.add('on');
+      }, duree + 50);
+    });
+  }
+
+  $('btn-explication').addEventListener('click', function () {
+    var q = qCourante();
+    Transport.majEtat({ phase: (q && q.explication) ? 'explication' : 'top' });
+  });
+
+  $('btn-vers-top').addEventListener('click', function () {
+    Transport.majEtat({ phase: 'top' });
+  });
+
+  /* ---------- classement ---------- */
+  function corrigeJusquA(index) {
+    return questionnaire.questions.slice(0, index + 1);
+  }
+  function joueursAvecReponses(jusqua) {
+    return Transport.joueurs().map(function (j) {
+      var reponses = [];
+      for (var q = 0; q <= jusqua; q++) {
+        var v = Transport.votes(q).filter(function (x) { return x.joueurId === j.id; })[0];
+        reponses.push(v ? { cochees: v.cases, ms: v.ms } : { cochees: [], ms: CONFIG.DUREE_VOTE_MS });
+      }
+      return { id: j.id, nom: j.nom, reponses: reponses };
+    });
+  }
+
+  function ligne(l, podium) {
+    var d = document.createElement('div');
+    d.className = 'ligne' + (podium && l.rang <= 3 ? ' tete' : '');
+    d.innerHTML = '<div class="rg">' + l.rang + '</div>' +
+                  '<div class="nm"></div>' +
+                  '<div class="pt">' + l.points + '<small>pt' + (l.points > 1 ? 's' : '') + '</small></div>';
+    d.querySelector('.nm').textContent = l.nom;
+    return d;
+  }
+
+  function afficherTop() {
+    var e = Transport.etat();
+    var cl = QL.classer(joueursAvecReponses(e.questionIndex), corrigeJusquA(e.questionIndex));
+    $('liste-top').innerHTML = '';
+    cl.slice(0, 5).forEach(function (l) { $('liste-top').appendChild(ligne(l, true)); });
+    var dernier = e.questionIndex >= e.nbQuestions - 1;
+    $('btn-suivant').textContent = dernier ? 'CLASSEMENT FINAL' : 'QUESTION SUIVANTE';
+  }
+
+  $('btn-suivant').addEventListener('click', function () {
+    var e = Transport.etat();
+    if (e.questionIndex >= e.nbQuestions - 1) Transport.majEtat({ phase: 'final' });
+    else allerQuestion(e.questionIndex + 1);
+  });
+
+  /* Le podium et le ruban servent au classement d'une partie comme a celui
+     de la journee. Seul le texte sous chaque nom change. */
+  function remplirPodium(cl, sousTexte) {
+    var podium = $('podium');
+    podium.innerHTML = '';
+    [1, 0, 2].forEach(function (i) {
+      var l = cl[i];
+      var d = document.createElement('div');
+      d.className = 'marche m' + (i + 1) + (l ? '' : ' vide');
+      d.innerHTML = '<div class="nom"></div><div class="pts"></div><div class="socle"></div>';
+      if (l) {
+        d.querySelector('.nom').textContent = l.nom;
+        d.querySelector('.pts').textContent = sousTexte(l);
+        d.querySelector('.socle').textContent = l.rang;
+      }
+      podium.appendChild(d);
+    });
+  }
+
+  function remplirRuban(cl) {
+    var autres = cl.slice(3);
+    var piste = $('ruban-piste');
+    if (animRuban) { animRuban.cancel(); animRuban = null; }
+    piste.innerHTML = '';
+    $('ruban').classList.toggle('cache', autres.length === 0);
+    if (!autres.length) return;
+
+    function remplir() {
+      autres.forEach(function (l) {
+        var j = document.createElement('div');
+        j.className = 'jeton';
+        j.innerHTML = '<span class="r"></span><span class="n"></span><span class="p"></span>';
+        j.querySelector('.r').textContent = l.rang + '.';
+        j.querySelector('.n').textContent = l.nom;
+        j.querySelector('.p').textContent = l.points + ' pt' + (l.points > 1 ? 's' : '');
+        piste.appendChild(j);
+      });
+    }
+    remplir(); remplir();   // deux passes : la boucle est invisible
+    requestAnimationFrame(function () {
+      var course = piste.scrollWidth / 2;
+      animRuban = piste.animate(
+        [{ transform: 'translateX(0)' }, { transform: 'translateX(-' + course + 'px)' }],
+        { duration: Math.max(14000, autres.length * 1150), iterations: Infinity, easing: 'linear' }
+      );
+    });
+  }
+
+  function unSeulPremier(cl) {
+    return cl.length && cl.filter(function (l) { return l.rang === 1; }).length === 1;
+  }
+
+  function boutonsClassement(estJournee) {
+    var archive = Transport.journee().parties.length > 0;
+    $('btn-journee').classList.toggle('cache', estJournee || !archive);
+    $('btn-exporter').classList.toggle('cache', !estJournee);
+    $('btn-vider-journee').classList.toggle('cache', !estJournee);
+  }
+
+  /* ---------- le classement d'une partie ---------- */
+  function afficherFinal() {
+    var e = Transport.etat();
+    var cl = QL.classer(joueursAvecReponses(e.nbQuestions - 1), corrigeJusquA(e.nbQuestions - 1));
+
+    /* On met la partie a l'abri AVANT tout retour a l'accueil : c'est ce qui
+       empeche le resultat du matin de disparaitre en fin de journee. */
+    Transport.archiver({
+      id: e.partieId,
+      questionnaire: e.questionnaire,
+      titre: (questionnaire && questionnaire.titre) || String(e.questionnaire || '').toUpperCase(),
+      fini: Date.now(),
+      classement: cl.map(function (l) {
+        return { nom: l.nom, points: l.points, cumulMs: l.cumulMs,
+                 nbNotees: l.nbNotees, meilleurMs: l.meilleurMs };
+      })
+    });
+
+    $('final-titre').textContent = 'Classement final — ' +
+      ((questionnaire && questionnaire.titre) || '');
+    remplirPodium(cl, function (l) { return l.points + (l.points > 1 ? ' points' : ' point'); });
+    remplirRuban(cl);
+    boutonsClassement(false);
+    if (unSeulPremier(cl)) confettisMur();
+  }
+
+  /* ---------- le classement de la journee ---------- */
+  function afficherJournee() {
+    var j = Transport.journee();
+    var cl = QL.classerJournee(j.parties);
+    $('final-titre').textContent = 'Classement de la journée — ' +
+      j.parties.map(function (p) { return p.titre; }).join(' + ');
+    remplirPodium(cl, function (l) {
+      return l.points + (l.points > 1 ? ' points' : ' point') +
+             ' · ' + l.sessions + ' session' + (l.sessions > 1 ? 's' : '');
+    });
+    remplirRuban(cl);
+    boutonsClassement(true);
+    if (unSeulPremier(cl)) confettisMur();
+  }
+
+  function versJournee() { Transport.majEtat({ phase: 'journee' }); }
+  $('btn-journee').addEventListener('click', versJournee);
+  $('btn-voir-journee').addEventListener('click', versJournee);
+
+  /* Un filet de securite : le classement part sur le disque, au cas ou le
+     navigateur de la console perdrait ses donnees entre midi et le soir. */
+  $('btn-exporter').addEventListener('click', function () {
+    var j = Transport.journee();
+    var donnees = {
+      exporte: new Date().toISOString(),
+      parties: j.parties,
+      general: QL.classerJournee(j.parties)
+    };
+    var lien = document.createElement('a');
+    lien.href = URL.createObjectURL(new Blob([JSON.stringify(donnees, null, 2)],
+                                             { type: 'application/json' }));
+    lien.download = 'quizz-lachal-journee.json';
+    document.body.appendChild(lien);
+    lien.click();
+    setTimeout(function () { URL.revokeObjectURL(lien.href); lien.remove(); }, 2000);
+  });
+
+  $('btn-vider-journee').addEventListener('click', function () {
+    var n = Transport.journee().parties.length;
+    if (!confirm('Effacer définitivement le classement de la journée (' + n +
+                 ' partie' + (n > 1 ? 's' : '') + ') ?\n\nÀ faire après une répétition, pas pendant la vraie journée.')) return;
+    Transport.viderJournee();
+    annulerRevelation();
+    if (animRuban) { animRuban.cancel(); animRuban = null; }
+    Transport.reinitialiser();
+  });
+
+  $('btn-accueil').addEventListener('click', function () {
+    annulerRevelation();
+    arreterDefilement();
+    if (animRuban) { animRuban.cancel(); animRuban = null; }
+    Transport.reinitialiser();
+  });
+
+  /* ---------- confettis du mur ---------- */
+  var cv = $('confettis-mur'), ctx = cv.getContext('2d'), anim = null;
+  function taille() { cv.width = innerWidth; cv.height = innerHeight; }
+  addEventListener('resize', taille); taille();
+  function confettisMur() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var couleurs = ['#FBE9A8', '#F0C75A', '#4FD98A', '#8FD3FF', '#FFFFFF'];
+    var grains = [];
+    for (var i = 0; i < 260; i++) {
+      grains.push({ x: Math.random() * cv.width, y: -Math.random() * cv.height * .6,
+        vx: (Math.random() - .5) * 2.4, vy: Math.random() * 3 + 2, r: Math.random() * 9 + 4,
+        a: Math.random() * Math.PI, va: (Math.random() - .5) * .22,
+        c: couleurs[(Math.random() * couleurs.length) | 0] });
+    }
+    if (anim) cancelAnimationFrame(anim);
+    var debut = performance.now();
+    (function boucle(t) {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      grains.forEach(function (g) {
+        g.y += g.vy; g.x += g.vx; g.a += g.va;
+        if (g.y > cv.height + 20) { g.y = -20; g.x = Math.random() * cv.width; }
+        ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(g.a);
+        ctx.fillStyle = g.c; ctx.fillRect(-g.r / 2, -g.r / 2, g.r, g.r * 1.5); ctx.restore();
+      });
+      if (t - debut < 9000) anim = requestAnimationFrame(boucle);
+      else ctx.clearRect(0, 0, cv.width, cv.height);
+    })(debut);
+  }
+
+  /* ---------- le chef d'orchestre ---------- */
+  var phasePrecedente = null, qiPrecedent = -2;
+
+  function peindre() {
+    var e = Transport.etat();
+    if (e.questionnaire && !questionnaire) questionnaire = QUESTIONNAIRES[e.questionnaire];
+    var nouvellePhase = (e.phase !== phasePrecedente) || (e.questionIndex !== qiPrecedent);
+
+    switch (e.phase) {
+      case 'accueil':
+        if (nouvellePhase) { annulerRevelation(); clearInterval(minuteur); minuteur = null; questionnaire = null; }
+        $('btn-voir-journee').classList.toggle('cache', Transport.journee().parties.length === 0);
+        scene('accueil');
+        break;
+
+      case 'inscription':
+        if (nouvellePhase) preparerInscription();
+        scene('inscription');
+        var js = Transport.joueurs();
+        $('nb-joueurs').textContent = js.length;
+        $('btn-lancer').disabled = js.length === 0;
+        if ($('liste-joueurs').childElementCount !== js.length) {
+          $('liste-joueurs').innerHTML = '';
+          js.forEach(function (j) {
+            var s = document.createElement('div');
+            s.className = 'pastille-nom'; s.textContent = j.nom;
+            $('liste-joueurs').appendChild(s);
+          });
+        }
+        break;
+
+      case 'lecture':
+        if (nouvellePhase) {
+          annulerRevelation();
+          arreterDefilement();
+          fermetureLancee = false;
+          departLocal = 0;
+          dessinerCases();
+          majEnonce();
+          $('rebours').textContent = Math.round(CONFIG.DUREE_VOTE_MS / 1000);
+          $('rebours').classList.remove('urgence');
+          $('info-votes').textContent = '';
+          $('btn-go').classList.remove('cache');
+          $('btn-explication').classList.add('cache');
+          $('indice').textContent = 'Espace = GO';
+        }
+        scene('jeu');
+        break;
+
+      case 'vote':
+        if (nouvellePhase) {
+          dessinerCases();
+          majEnonce();
+          $('btn-go').classList.add('cache');
+          $('btn-explication').classList.add('cache');
+          $('indice').textContent = '';
+          if (!minuteur) minuteur = setInterval(tick, 200);
+          tick();
+        }
+        scene('jeu');
+        break;
+
+      case 'ferme':
+        scene('jeu');
+        break;
+
+      case 'revelation':
+        scene('jeu');
+        break;
+
+      case 'explication':
+        if (nouvellePhase) afficherExplication();
+        scene('explication');
+        break;
+
+      case 'top':
+        if (nouvellePhase) afficherTop();
+        scene('top');
+        break;
+
+      case 'final':
+        if (nouvellePhase) afficherFinal();
+        scene('final');
+        break;
+
+      case 'journee':
+        if (nouvellePhase) afficherJournee();
+        scene('final');
+        break;
+    }
+    phasePrecedente = e.phase;
+    qiPrecedent = e.questionIndex;
+  }
+
+  Transport.sur('etat', peindre);
+  Transport.sur('joueurs', peindre);
+  Transport.sur('votes', function () { if (Transport.etat().phase === 'vote') tick(); });
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.target.tagName === 'INPUT') return;
+    var e = Transport.etat();
+    if (ev.code === 'Space' || ev.code === 'Enter') {
+      ev.preventDefault();
+      if (e.phase === 'accueil') $('btn-commencer').click();
+      else if (e.phase === 'inscription' && !$('btn-lancer').disabled) $('btn-lancer').click();
+      else if (e.phase === 'lecture') lancerVote();
+      else if (e.phase === 'revelation' && !$('btn-explication').classList.contains('cache')) $('btn-explication').click();
+      else if (e.phase === 'explication') $('btn-vers-top').click();
+      else if (e.phase === 'top') $('btn-suivant').click();
+    }
+    if (ev.key === 'f' || ev.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function(){});
+      else document.exitFullscreen();
+    }
+  });
+
+  function demarrer() {
+    peindre();
+    console.log('Transport : ' + (window.TRANSPORT_UTILISE || 'local'));
+  }
+
+  if (Transport.demarrer) {
+    Transport.demarrer().then(demarrer).catch(function (e) {
+      alert('Connexion à Supabase impossible :\n\n' + e.message +
+            '\n\nVérifie js/config.js et ta connexion.');
+    });
+  } else {
+    demarrer();
+  }
+})();
+</script>
+</body>
+</html>

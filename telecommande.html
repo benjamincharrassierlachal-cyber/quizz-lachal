@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0B1A2D">
+<title>Le Quizz Lachal</title>
+<link rel="stylesheet" href="js/theme.css">
+<style>
+  body {
+    display: flex; flex-direction: column;
+    min-height: 100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: radial-gradient(120% 80% at 50% 0%, #1B3554 0%, var(--encre) 62%);
+    overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+  }
+  .ecran { flex: 1; display: none; flex-direction: column; padding: 22px; }
+  .ecran.actif { display: flex; }
+
+  .marque { font-family: var(--titre); font-size: 1.5rem; color: var(--or); letter-spacing: .02em; text-align: center; }
+  .marque small { display: block; font-family: var(--texte); font-size: .68rem; letter-spacing: .2em;
+                  text-transform: uppercase; color: rgba(244,238,223,.45); margin-top: 4px; }
+
+  /* --- inscription --- */
+  .centre { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 18px; }
+  input[type="text"] {
+    width: 100%; padding: 18px 20px; font-family: var(--texte); font-weight: 800; font-size: 1.25rem;
+    color: var(--creme); background: rgba(11,26,45,.85);
+    border: 2px solid rgba(214,176,90,.4); border-radius: 14px; text-align: center;
+  }
+  input[type="text"]::placeholder { color: rgba(244,238,223,.3); font-weight: 700; }
+  .erreur { color: #FF9A95; font-size: .88rem; text-align: center; min-height: 1.2em; }
+  .pleine { width: 100%; font-size: 1.15rem; }
+
+  /* --- attente --- */
+  .attente-titre { font-family: var(--titre); font-size: 2rem; text-align: center; color: var(--creme); }
+  .pastille { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--vert-vif);
+              margin-right: 8px; animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:.35; } 50% { opacity:1; } }
+  .doux { text-align: center; color: rgba(244,238,223,.6); font-size: .95rem; line-height: 1.5; }
+
+  /* --- vote --- */
+  .barre-temps { height: 8px; border-radius: 99px; background: rgba(255,255,255,.09); overflow: hidden; margin-bottom: 6px; }
+  .barre-temps i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--or), var(--or-clair));
+                   transform-origin: left; transition: transform .25s linear; }
+  .barre-temps.urgence i { background: linear-gradient(90deg, #E0564F, #FF8A7A); }
+  .chrono { font-family: var(--titre); font-size: 1.6rem; text-align: center; color: var(--or-clair); margin-bottom: 10px; }
+  .chrono.urgence { color: #FF9A85; }
+
+  .clavier { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+  .touche {
+    display: grid; place-items: center;
+    font-family: var(--titre); font-size: clamp(2.6rem, 15vw, 4.5rem); line-height: 1;
+    color: rgba(244,238,223,.45);
+    background: linear-gradient(180deg, #21395A 0%, #16283E 100%);
+    border: 3px solid rgba(214,176,90,.28); border-radius: 20px;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.08), inset 0 -4px 0 rgba(0,0,0,.35), 0 6px 16px rgba(0,0,0,.4);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: transform .07s ease, color .12s ease, border-color .12s ease, background .12s ease, box-shadow .12s ease;
+  }
+  .touche:active { transform: scale(.97); }
+  .touche[aria-pressed="true"] {
+    color: #24344C;
+    background: linear-gradient(180deg, #FDF3CE 0%, var(--or) 55%, var(--or-fonce) 100%);
+    border-color: var(--or-clair);
+    text-shadow: 0 1px 0 rgba(255,255,255,.5);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.7), inset 0 -4px 0 rgba(0,0,0,.2),
+                0 0 30px rgba(240,199,90,.42), 0 6px 16px rgba(0,0,0,.4);
+  }
+  .touche:disabled { cursor: default; }
+
+  /* --- saisie libre : une annee --- */
+  .saisie-champ {
+    width: 100%; padding: 22px 16px; font-family: var(--titre); font-size: clamp(3rem, 18vw, 5rem);
+    letter-spacing: .12em; text-align: center; color: var(--or-clair);
+    background: linear-gradient(180deg, #21395A 0%, #16283E 100%);
+    border: 3px solid rgba(214,176,90,.4); border-radius: 20px;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.08), inset 0 -4px 0 rgba(0,0,0,.35);
+  }
+  .saisie-champ::placeholder { color: rgba(240,199,90,.22); }
+  .saisie-champ:focus { outline: none; border-color: var(--or-clair);
+                        box-shadow: inset 0 2px 0 rgba(255,255,255,.1), 0 0 30px rgba(240,199,90,.3); }
+  .saisie-aide { text-align: center; color: rgba(244,238,223,.6); font-size: .9rem; line-height: 1.45; margin-top: 14px; }
+
+  /* --- verrouille --- */
+  .recap { font-family: var(--titre); font-size: 3.2rem; color: var(--or); text-align: center; letter-spacing: .08em; }
+
+  /* --- resultat --- */
+  .verdict { font-family: var(--titre); font-size: clamp(3rem, 20vw, 6rem); line-height: .95; text-align: center; }
+  .verdict.gagne { color: var(--vert-vif); text-shadow: 0 0 40px rgba(79,217,138,.5); }
+  .verdict.partiel { color: var(--or-clair); }
+  .verdict.rate { color: #FF8A80; }
+  .verdict.bonus { color: var(--or-clair); text-shadow: 0 0 40px rgba(240,199,90,.55); }
+  .sous-verdict { text-align: center; color: rgba(244,238,223,.7); font-size: 1rem; margin-top: 10px; }
+
+  #confettis { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+
+  .voile-victoire {
+    position: fixed; inset: 0; pointer-events: none; z-index: 40; opacity: 0;
+    background: radial-gradient(circle at 50% 45%, rgba(79,217,138,.55), rgba(79,217,138,0) 65%);
+    transition: opacity .4s ease;
+  }
+  .voile-victoire.on { opacity: 1; }
+</style>
+</head>
+<body>
+
+<canvas id="confettis"></canvas>
+<div class="voile-victoire" id="voile"></div>
+
+<!-- 1. inscription -->
+<section class="ecran actif" id="ecran-nom">
+  <div class="marque">Le Quizz Lachal<small>Télécommande</small></div>
+  <div class="centre">
+    <div>
+      <input type="text" id="champ-nom" placeholder="Ton prénom" autocomplete="given-name"
+             autocapitalize="words" maxlength="18" enterkeyhint="go">
+      <div class="erreur" id="erreur-nom"></div>
+    </div>
+    <button class="bouton-or pleine" id="btn-rejoindre" type="button">REJOINDRE</button>
+    <button class="bouton-sobre cache" id="btn-reprendre" type="button"></button>
+  </div>
+  <div class="doux">Ton téléphone ne sert que de télécommande.<br>Les questions sont sur le grand écran.</div>
+</section>
+
+<!-- 2. attente -->
+<section class="ecran" id="ecran-attente">
+  <div class="marque">Le Quizz Lachal<small id="attente-nom"></small></div>
+  <div class="centre">
+    <div class="attente-titre" id="attente-titre">Tu es dans la partie</div>
+    <div class="doux" id="attente-texte"><span class="pastille"></span>En attente du grand écran…</div>
+  </div>
+</section>
+
+<!-- 3. vote -->
+<section class="ecran" id="ecran-vote">
+  <div class="barre-temps" id="barre"><i id="barre-jauge"></i></div>
+  <div class="chrono chiffres" id="chrono">30</div>
+  <div class="clavier" id="clavier">
+    <button class="touche" type="button" aria-pressed="false" data-k="A">A</button>
+    <button class="touche" type="button" aria-pressed="false" data-k="B">B</button>
+    <button class="touche" type="button" aria-pressed="false" data-k="C">C</button>
+    <button class="touche" type="button" aria-pressed="false" data-k="D">D</button>
+  </div>
+  <button class="bouton-or pleine" id="btn-valider" type="button">VALIDER</button>
+</section>
+
+<!-- 3bis. saisie libre -->
+<section class="ecran" id="ecran-saisie">
+  <div class="barre-temps" id="barre2"><i id="barre-jauge2"></i></div>
+  <div class="chrono chiffres" id="chrono2">30</div>
+  <div class="centre">
+    <input type="text" id="champ-saisie" class="saisie-champ" inputmode="numeric"
+           pattern="[0-9]*" maxlength="4" autocomplete="off" enterkeyhint="go">
+    <div class="saisie-aide" id="aide-saisie"></div>
+  </div>
+  <button class="bouton-or pleine" id="btn-valider-saisie" type="button">VALIDER</button>
+</section>
+
+<!-- 4. verrouille -->
+<section class="ecran" id="ecran-verrouille">
+  <div class="marque">Le Quizz Lachal<small>Réponse enregistrée</small></div>
+  <div class="centre">
+    <div class="recap" id="recap"></div>
+    <div class="doux">C'est verrouillé.<br>Regarde le mur.</div>
+  </div>
+</section>
+
+<!-- 5. resultat -->
+<section class="ecran" id="ecran-resultat">
+  <div class="centre">
+    <div class="verdict" id="verdict"></div>
+    <div class="sous-verdict" id="sous-verdict"></div>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/bareme.js"></script>
+<script src="js/transport.js"></script>
+<script src="js/transport-supabase.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var ecrans = ['ecran-nom', 'ecran-attente', 'ecran-vote', 'ecran-saisie', 'ecran-verrouille', 'ecran-resultat'];
+  function montrer(id) {
+    ecrans.forEach(function (e) { $(e).classList.toggle('actif', e === id); });
+  }
+
+  var moi = null;
+  var champPrerempli = false;   // on ne pre-remplit le prenom qu'une fois par visite
+  var qiCourant = -1;
+  var aVote = false;
+  var resultatMontre = -1;
+  var minuteur = null;
+  /* Compte a rebours local : il demarre quand la phase « vote » arrive.
+     Les points se jouent sur l'horloge du serveur, pas sur celle-ci. */
+  var departLocal = 0;
+
+  /* ---------- son (debloque par le premier appui) ---------- */
+  var audio = null;
+  function debloquerAudio() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !audio) audio = new AC();
+      if (audio && audio.state === 'suspended') audio.resume();
+    } catch (e) {}
+  }
+  function jouer(notes, type) {
+    if (!audio) return;
+    var t = audio.currentTime;
+    notes.forEach(function (n, i) {
+      var o = audio.createOscillator(), g = audio.createGain();
+      o.type = type || 'triangle';
+      o.frequency.value = n;
+      g.gain.setValueAtTime(0.0001, t + i * 0.09);
+      g.gain.exponentialRampToValueAtTime(0.25, t + i * 0.09 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.09 + 0.34);
+      o.connect(g); g.connect(audio.destination);
+      o.start(t + i * 0.09); o.stop(t + i * 0.09 + 0.36);
+    });
+  }
+  var sonVictoire = function () { jouer([523, 659, 784, 1046], 'triangle'); };
+  var sonEchec    = function () { jouer([196, 165], 'sine'); };
+  var sonClic     = function () { jouer([880], 'square'); };
+
+  /* ---------- ecran toujours allume ---------- */
+  var verrouEcran = null;
+  function garderAllume() {
+    if (!('wakeLock' in navigator)) return;
+    navigator.wakeLock.request('screen').then(function (v) {
+      verrouEcran = v;
+      v.addEventListener('release', function () { verrouEcran = null; });
+    }).catch(function () { /* refus : sans consequence */ });
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && !verrouEcran && moi) garderAllume();
+  });
+
+  /* ---------- confettis ---------- */
+  var cv = $('confettis'), ctx = cv.getContext('2d'), grains = [], anim = null;
+  function dimensionner() { cv.width = innerWidth; cv.height = innerHeight; }
+  addEventListener('resize', dimensionner); dimensionner();
+
+  function lancerConfettis() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var couleurs = ['#FBE9A8', '#F0C75A', '#4FD98A', '#8FD3FF', '#FFFFFF'];
+    grains = [];
+    for (var i = 0; i < 130; i++) {
+      grains.push({
+        x: cv.width / 2 + (Math.random() - .5) * 120,
+        y: cv.height * 0.42,
+        vx: (Math.random() - .5) * 11,
+        vy: -Math.random() * 13 - 4,
+        r: Math.random() * 6 + 3,
+        a: Math.random() * Math.PI,
+        va: (Math.random() - .5) * .3,
+        c: couleurs[(Math.random() * couleurs.length) | 0]
+      });
+    }
+    if (anim) cancelAnimationFrame(anim);
+    var debut = performance.now();
+    (function boucle(t) {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      grains.forEach(function (g) {
+        g.vy += 0.32; g.x += g.vx; g.y += g.vy; g.a += g.va; g.vx *= 0.995;
+        ctx.save(); ctx.translate(g.x, g.y); ctx.rotate(g.a);
+        ctx.fillStyle = g.c; ctx.fillRect(-g.r / 2, -g.r / 2, g.r, g.r * 1.6);
+        ctx.restore();
+      });
+      if (t - debut < 4200) anim = requestAnimationFrame(boucle);
+      else ctx.clearRect(0, 0, cv.width, cv.height);
+    })(debut);
+  }
+
+  /* ---------- inscription ---------- */
+  var champ = $('champ-nom'), erreur = $('erreur-nom');
+
+  function tenterRejoindre(nom) {
+    debloquerAudio();
+    var r = Transport.rejoindre(nom);
+    if (!r) { erreur.textContent = 'Écris ton prénom.'; return; }
+    if (r.erreur) { erreur.textContent = r.erreur; return; }
+    erreur.textContent = '';
+    moi = r;
+    garderAllume();
+    peindre();
+  }
+
+  $('btn-rejoindre').addEventListener('click', function () { tenterRejoindre(champ.value); });
+  champ.addEventListener('keydown', function (e) { if (e.key === 'Enter') tenterRejoindre(champ.value); });
+
+  // « Rejoindre en tant que … » quand une partie neuve demarre
+  function nomMemorise() {
+    var m = Transport.moi();
+    return (m && m.ancien && m.nom) ? m.nom : Transport.dernierNom();
+  }
+
+  function proposerReprise() {
+    var btn = $('btn-reprendre');
+    var nom = nomMemorise();
+    if (nom) {
+      /* Une seule fois : cette fonction est rappelee chaque seconde, et sans
+         ce garde-fou elle reecrivait par-dessus ce que le joueur est en train
+         de taper. */
+      if (!champPrerempli && !champ.value) champ.value = nom;
+      btn.textContent = 'Rejoindre en tant que ' + nom;
+      btn.classList.toggle('cache', champ.value.trim() !== nom);
+      btn.onclick = function () { tenterRejoindre(nom); };
+    } else {
+      btn.classList.add('cache');
+    }
+    champPrerempli = true;
+  }
+
+  /* Dès que le joueur modifie le champ, le raccourci de reprise s'efface :
+     pas d'ambiguite entre le prenom tape et celui du bouton. */
+  champ.addEventListener('input', function () {
+    var nom = nomMemorise();
+    $('btn-reprendre').classList.toggle('cache', !nom || champ.value.trim() !== nom);
+  });
+
+  /* ---------- vote ---------- */
+  var touches = Array.prototype.slice.call(document.querySelectorAll('.touche'));
+  function choisies() {
+    return touches.filter(function (t) { return t.getAttribute('aria-pressed') === 'true'; })
+                  .map(function (t) { return t.dataset.k; });
+  }
+  function viderTouches() {
+    touches.forEach(function (t) { t.setAttribute('aria-pressed', 'false'); t.disabled = false; });
+  }
+  touches.forEach(function (t) {
+    t.addEventListener('click', function () {
+      if (t.disabled) return;
+      t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+      sonClic();
+      if (navigator.vibrate) navigator.vibrate(12);
+    });
+  });
+
+  /* Ce que le joueur a compose : des lettres, ou une annee tapee. */
+  function reponseCourante() {
+    if (Transport.etat().typeQuestion === 'annee') {
+      var v = $('champ-saisie').value.replace(/[^0-9]/g, '');
+      return v ? [v] : [];
+    }
+    return choisies();
+  }
+
+  function envoyerVote() {
+    var cases = reponseCourante();
+    var etat = Transport.etat();
+    var ms = departLocal ? (Date.now() - departLocal) : 0;
+    if (Transport.voter(etat.questionIndex, cases, ms)) {
+      aVote = true;
+      $('recap').textContent = cases.length ? cases.join(' ') : '—';
+      montrer('ecran-verrouille');
+    }
+  }
+  $('btn-valider').addEventListener('click', function () {
+    if (aVote) return;
+    if (choisies().length === 0) {
+      $('btn-valider').textContent = 'CHOISIS UNE CASE';
+      setTimeout(function () { $('btn-valider').textContent = 'VALIDER'; }, 1200);
+      return;
+    }
+    envoyerVote();
+  });
+
+  var champSaisie = $('champ-saisie');
+  champSaisie.addEventListener('input', function () {
+    var v = champSaisie.value.replace(/[^0-9]/g, '').slice(0, 4);
+    if (v !== champSaisie.value) champSaisie.value = v;
+  });
+  champSaisie.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('btn-valider-saisie').click(); }
+  });
+  $('btn-valider-saisie').addEventListener('click', function () {
+    if (aVote) return;
+    if (reponseCourante().length === 0) {
+      $('btn-valider-saisie').textContent = 'TAPE UNE ANNÉE';
+      setTimeout(function () { $('btn-valider-saisie').textContent = 'VALIDER'; }, 1200);
+      return;
+    }
+    champSaisie.blur();
+    envoyerVote();
+  });
+
+  function tick() {
+    var etat = Transport.etat();
+    if (etat.phase !== 'vote') return;
+    if (!departLocal) departLocal = Date.now();
+    var reste = Math.max(0, CONFIG.DUREE_VOTE_MS - (Date.now() - departLocal));
+    var s = Math.ceil(reste / 1000);
+    ['', '2'].forEach(function (suf) {
+      $('chrono' + suf).textContent = s;
+      $('barre-jauge' + suf).style.transform = 'scaleX(' + (reste / CONFIG.DUREE_VOTE_MS) + ')';
+      $('chrono' + suf).classList.toggle('urgence', s <= 10);
+      $('barre' + suf).classList.toggle('urgence', s <= 10);
+    });
+    // validation d'office : les cases allumees comptent meme sans appui
+    if (reste <= 0 && !aVote) { envoyerVote(); }
+  }
+
+  /* ---------- resultat ---------- */
+  function afficherResultat(qi) {
+    var r = Transport.resultat(qi, moi.id);
+    if (!r) return;
+    resultatMontre = qi;
+    var v = $('verdict'), s = $('sous-verdict');
+    v.className = 'verdict ' + r.etat;
+    var annee = Transport.etat().typeQuestion === 'annee';
+    if (r.etat === 'gagne') {
+      v.textContent = annee ? 'PILE !' : 'GAGNÉ';
+      s.textContent = (annee ? 'Dans le mille — ' : '') +
+                      (r.points > 1 ? r.points + ' points' : '1 point');
+      $('voile').classList.add('on');
+      setTimeout(function () { $('voile').classList.remove('on'); }, 900);
+      lancerConfettis();
+      sonVictoire();
+      if (navigator.vibrate) navigator.vibrate([0, 90, 60, 90, 60, 200]);
+    } else if (r.etat === 'bonus') {
+      v.textContent = 'BONUS';
+      s.textContent = 'Aucun point — juste pour le plaisir';
+      lancerConfettis();
+      sonVictoire();
+      if (navigator.vibrate) navigator.vibrate([0, 70, 50, 70]);
+    } else if (r.etat === 'partiel') {
+      v.textContent = '+' + r.points;
+      if (annee) {
+        s.textContent = r.ecart === 1 ? 'À un an près !' : 'À ' + r.ecart + ' ans près';
+      } else {
+        s.textContent = r.points > 1 ? 'points, mais incomplet' : 'point, mais incomplet';
+      }
+      if (navigator.vibrate) navigator.vibrate(60);
+    } else {
+      v.textContent = 'RATÉ';
+      s.textContent = 'Zéro point sur cette question';
+      sonEchec();
+    }
+    montrer('ecran-resultat');
+  }
+
+  /* ---------- le chef d'orchestre ---------- */
+  function peindre() {
+    var etat = Transport.etat();
+    var m = Transport.moi();
+
+    if (!m || m.ancien) {
+      moi = null;
+      clearInterval(minuteur); minuteur = null;
+      proposerReprise();
+      montrer('ecran-nom');
+      return;
+    }
+    moi = m;
+    champPrerempli = false;   // a la prochaine visite de l'ecran nom, on repropose
+    $('attente-nom').textContent = m.nom;
+
+    if (etat.questionIndex !== qiCourant) {
+      qiCourant = etat.questionIndex;
+      aVote = false;
+      departLocal = 0;
+      viderTouches();
+      $('champ-saisie').value = '';
+      $('btn-valider-saisie').textContent = 'VALIDER';
+    }
+
+    switch (etat.phase) {
+      case 'accueil':
+        montrer('ecran-nom');
+        break;
+
+      case 'inscription':
+        $('attente-titre').textContent = 'Tu es dans la partie';
+        $('attente-texte').innerHTML = '<span class="pastille"></span>En attente du grand écran…';
+        montrer('ecran-attente');
+        break;
+
+      case 'lecture':
+        $('attente-titre').textContent = 'Question ' + (etat.questionIndex + 1);
+        $('attente-texte').innerHTML = etat.typeQuestion === 'annee'
+          ? '<span class="pastille"></span>Lis la question au mur.<br>Tu taperas une année au GO.'
+          : '<span class="pastille"></span>Lis la question au mur.<br>Les cases s\'allument au GO.';
+        montrer('ecran-attente');
+        break;
+
+      case 'vote':
+        if (aVote) { montrer('ecran-verrouille'); }
+        else {
+          if (etat.typeQuestion === 'annee') {
+            $('champ-saisie').placeholder = etat.formatSaisie || '1999';
+            $('aide-saisie').innerHTML = 'Tape une année, quatre chiffres.<br>Au plus près, c\'est le mieux.';
+            montrer('ecran-saisie');
+          } else {
+            montrer('ecran-vote');
+          }
+          if (!minuteur) minuteur = setInterval(tick, 200);
+          tick();
+        }
+        break;
+
+      case 'ferme':
+        clearInterval(minuteur); minuteur = null;
+        if (!aVote) { envoyerVote(); }
+        montrer('ecran-verrouille');
+        break;
+
+      case 'revelation':
+      case 'explication':
+      case 'top':
+        if (resultatMontre === etat.questionIndex) montrer('ecran-resultat');
+        else if (Transport.resultat(etat.questionIndex, m.id)) afficherResultat(etat.questionIndex);
+        else montrer('ecran-verrouille');
+        break;
+
+      case 'final':
+      case 'journee':
+        $('attente-titre').textContent = 'C\'est terminé';
+        $('attente-texte').innerHTML = 'Le classement est au mur.<br>Merci d\'avoir joué !';
+        montrer('ecran-attente');
+        break;
+    }
+  }
+
+  Transport.sur('etat', peindre);
+  Transport.sur('joueurs', peindre);
+  Transport.sur('resultats', function () {
+    var etat = Transport.etat();
+    if (moi && (etat.phase === 'revelation' || etat.phase === 'explication' || etat.phase === 'top') && resultatMontre !== etat.questionIndex) {
+      if (Transport.resultat(etat.questionIndex, moi.id)) afficherResultat(etat.questionIndex);
+    }
+  });
+
+  function demarrer() {
+    proposerReprise();
+    peindre();
+    setInterval(peindre, 1000);   // filet de securite si un message se perd
+  }
+
+  if (Transport.demarrer) {
+    Transport.demarrer().then(demarrer).catch(function (e) {
+      document.body.innerHTML =
+        '<div style="padding:40px;text-align:center;font-family:Nunito,sans-serif">' +
+        '<h2 style="color:#F0C75A">Connexion impossible</h2>' +
+        '<p style="color:#B2C0B7">Vérifie ta connexion, puis recharge la page.</p></div>';
+      console.error(e);
+    });
+  } else {
+    demarrer();
+  }
+})();
+</script>
+</body>
+</html>
