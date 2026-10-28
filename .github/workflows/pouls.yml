@@ -1,0 +1,27 @@
+# Le plan gratuit de Supabase met un projet en pause apres 7 jours sans
+# activite — et un projet en pause, le matin de la reunion, c'est le quizz
+# mort. Une ecriture hebdomadaire dans la table « pouls » suffit a le tenir
+# eveille. GitHub lance ce travail tout seul, meme PC eteint.
+#
+# La cle est la cle publiable : elle est deja dans js/config.js, donc dans
+# la page que chaque telephone telecharge. Rien de neuf n'est expose ici.
+name: Pouls Supabase
+
+on:
+  schedule:
+    - cron: '17 9 * * 1'   # tous les lundis, 9 h 17 UTC
+  workflow_dispatch:        # et a la demande, depuis l'onglet Actions
+
+jobs:
+  pouls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Une ligne dans la table pouls
+        run: |
+          curl -sS -X POST "https://dglucwqrviuzftagbwbn.supabase.co/rest/v1/pouls" \
+            -H "apikey: sb_publishable_ZBZwBNng-jCbTQCvv4zf2w_ARQdjAtb" \
+            -H "Authorization: Bearer sb_publishable_ZBZwBNng-jCbTQCvv4zf2w_ARQdjAtb" \
+            -H "Content-Type: application/json" \
+            -d '{"vu":"now"}' \
+            -w "\nstatut HTTP %{http_code}\n" \
+            --fail-with-body
