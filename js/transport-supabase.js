@@ -169,6 +169,11 @@
      console — elle se reconnait au fait qu'elle est le seul appareil
      abonne aux votes. */
   var minuteurSondage = null;
+  /* Une partie qu'on vient d'annuler. L'ecriture « phase = accueil » met
+     une fraction de seconde a arriver ; sans ce garde-fou, le sondage peut
+     relire la ligne d'avant et nous renvoyer une seconde sur l'ecran
+     d'inscription. */
+  var partieAnnulee = 0;
 
   function estConsole() { return (abonnes.votes || []).length > 0; }
 
@@ -209,6 +214,7 @@
         /* Plus ancienne : c'est notre propre insertion qui est encore en
            vol. On ne se laisse surtout pas ramener en arriere. */
         if (id !== partieSuivie) return;
+        if (id === partieAnnulee && l.phase !== 'accueil') return;
 
         var neuf = versEtat(l);
         if (neuf.phase !== cache.etat.phase ||
@@ -255,6 +261,7 @@
 
     creerPartie: function (cle, nbQuestions, titre) {
       var id = Date.now();
+      partieAnnulee = 0;
       cache = vide();
       cache.etat = { phase: 'inscription', questionnaire: cle, questionIndex: -1, departA: 0,
                      nbQuestions: nbQuestions, partieId: id, typeQuestion: 'qcm',
@@ -399,11 +406,27 @@
     },
     viderJournee: function () { try { localStorage.removeItem(CLE_JOURNEE); } catch (e) {} },
 
+    /* Annuler. En local il suffisait d'oublier la partie ; ici elle existe
+       aussi dans la base, et le sondage la retrouverait aussitot pour nous
+       ramener sur l'ecran d'inscription. On la referme donc vraiment : la
+       phase repasse a « accueil », ce qui renvoie du meme coup tous les
+       telephones a leur ecran de prenom. On garde son identifiant pour ne
+       pas la recharger, et la prochaine partie en recevra un plus grand. */
     reinitialiser: function () {
+      var id = cache.etat.partieId;
+      partieAnnulee = id;
       if (canal) { sb.removeChannel(canal); canal = null; }
-      partieSuivie = null;
       cache = vide();
+      partieSuivie = id || null;
       ['etat', 'joueurs', 'votes', 'resultats'].forEach(prevenir);
+      if (id) {
+        sb.from('parties')
+          .update({ phase: 'accueil', question_index: -1 })
+          .eq('id', id)
+          .then(function (r) {
+            if (r && r.error) console.error('Annulation non enregistree', r.error);
+          });
+      }
     }
   };
 
