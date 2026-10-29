@@ -497,8 +497,10 @@
     var url = (CONFIG.URL_PUBLIQUE || '').trim();
     $('qr').innerHTML = '';
     if (url) {
-      $('adresse').textContent = url.replace(/^https?:\/\//, '');
-      $('aide-locale').textContent = 'Scanne le code ou tape l’adresse';
+      /* L'adresse en clair n'apporte rien au mur : elle est longue, elle
+         encombre, et le code la porte deja. */
+      $('adresse').textContent = '';
+      $('aide-locale').textContent = 'Scanne le code avec ton téléphone';
       if (window.QRCode) {
         try { new QRCode($('qr'), { text: url, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M }); }
         catch (e) { $('qr').style.display = 'none'; }
