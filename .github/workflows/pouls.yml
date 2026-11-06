@@ -1,27 +1,46 @@
-# Le plan gratuit de Supabase met un projet en pause apres 7 jours sans
-# activite — et un projet en pause, le matin de la reunion, c'est le quizz
-# mort. Une ecriture hebdomadaire dans la table « pouls » suffit a le tenir
-# eveille. GitHub lance ce travail tout seul, meme PC eteint.
+# Le plan gratuit de Supabase met un projet en pause apres 7 jours
+# d'inactivite — et un projet en pause, le matin de la reunion, c'est le
+# quizz mort.
+#
+# Premiere version : un seul appel, le lundi. Insuffisant. La
+# documentation Supabase demande « quelques requetes par jour sur la
+# semaine ecoulee » : une par semaine ne compte pas, et le projet a bel et
+# bien ete mis en pause le 6 novembre. On passe donc a quatre passages par
+# jour, trois requetes a chaque fois.
 #
 # La cle est la cle publiable : elle est deja dans js/config.js, donc dans
 # la page que chaque telephone telecharge. Rien de neuf n'est expose ici.
+#
+# Si le projet venait a etre en pause, ces appels echoueraient et GitHub
+# enverrait un mail d'echec : c'est aussi l'alarme.
 name: Pouls Supabase
 
 on:
   schedule:
-    - cron: '17 9 * * 1'   # tous les lundis, 9 h 17 UTC
-  workflow_dispatch:        # et a la demande, depuis l'onglet Actions
+    - cron: '23 */6 * * *'   # toutes les six heures
+  workflow_dispatch:          # et a la demande, depuis l'onglet Actions
 
 jobs:
   pouls:
     runs-on: ubuntu-latest
     steps:
-      - name: Une ligne dans la table pouls
+      - name: Quelques requetes pour tenir le projet eveille
+        env:
+          BASE: https://dglucwqrviuzftagbwbn.supabase.co/rest/v1
+          CLE: sb_publishable_ZBZwBNng-jCbTQCvv4zf2w_ARQdjAtb
         run: |
-          curl -sS -X POST "https://dglucwqrviuzftagbwbn.supabase.co/rest/v1/pouls" \
-            -H "apikey: sb_publishable_ZBZwBNng-jCbTQCvv4zf2w_ARQdjAtb" \
-            -H "Authorization: Bearer sb_publishable_ZBZwBNng-jCbTQCvv4zf2w_ARQdjAtb" \
+          set -e
+          entetes=(-H "apikey: $CLE" -H "Authorization: Bearer $CLE")
+
+          echo "1. ecriture dans pouls"
+          curl -sS -X POST "$BASE/pouls" "${entetes[@]}" \
             -H "Content-Type: application/json" \
-            -d '{"vu":"now"}' \
-            -w "\nstatut HTTP %{http_code}\n" \
-            --fail-with-body
+            -d '{"vu":"now"}' -w "\n   statut HTTP %{http_code}\n" --fail-with-body
+
+          echo "2. lecture de pouls"
+          curl -sS "$BASE/pouls?select=id&order=id.desc&limit=1" "${entetes[@]}" \
+            -w "\n   statut HTTP %{http_code}\n" --fail-with-body
+
+          echo "3. lecture de parties"
+          curl -sS "$BASE/parties?select=id&limit=1" "${entetes[@]}" \
+            -w "\n   statut HTTP %{http_code}\n" --fail-with-body
