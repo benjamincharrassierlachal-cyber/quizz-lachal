@@ -125,6 +125,17 @@
 </section>
 
 <!-- 2. attente -->
+<!-- Tant que le grand ecran n'a pas ouvert de partie, on ne demande aucun
+     prenom : s'inscrire dans le vide ne menait qu'a de faux messages
+     d'erreur et a des doublons. -->
+<section class="ecran" id="ecran-ferme">
+  <div class="marque">Le Quizz Lachal<small>télécommande</small></div>
+  <div class="centre">
+    <div class="attente-titre">Pas encore ouvert</div>
+    <div class="doux"><span class="pastille"></span>Le grand écran affichera un QR code<br>quand ce sera le moment.</div>
+  </div>
+</section>
+
 <section class="ecran" id="ecran-attente">
   <div class="marque">Le Quizz Lachal<small id="attente-nom"></small></div>
   <div class="centre">
@@ -175,7 +186,10 @@
   </div>
 </section>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.js"></script>
+<!-- Les deux bibliotheques sont servies depuis le depot, pas depuis un CDN :
+     le jour J, une coupure chez cdnjs ou jsdelivr couterait le QR code ou le
+     temps reel. Versions figees : qrcodejs 1.0.0, supabase-js 2.58.0. -->
+<script src="js/vendor/supabase.js"></script>
 <script src="js/config.js"></script>
 <script src="js/bareme.js"></script>
 <script src="js/transport.js"></script>
@@ -185,7 +199,7 @@
   'use strict';
 
   var $ = function (id) { return document.getElementById(id); };
-  var ecrans = ['ecran-nom', 'ecran-attente', 'ecran-vote', 'ecran-saisie', 'ecran-verrouille', 'ecran-resultat'];
+  var ecrans = ['ecran-ferme', 'ecran-nom', 'ecran-attente', 'ecran-vote', 'ecran-saisie', 'ecran-verrouille', 'ecran-resultat'];
   function montrer(id) {
     ecrans.forEach(function (e) { $(e).classList.toggle('actif', e === id); });
   }
@@ -447,6 +461,19 @@
   /* ---------- le chef d'orchestre ---------- */
   function peindre() {
     var etat = Transport.etat();
+
+    /* Aucune partie ouverte sur le grand ecran : pas de prenom a saisir.
+       C'est ce qui evite de s'inscrire dans une partie terminee, de
+       recevoir « ce prenom est deja pris » et de se retrouver inscrit
+       deux fois sous deux noms differents. */
+    if (!etat.partieId || etat.phase === 'accueil') {
+      clearInterval(minuteur); minuteur = null;
+      moi = null;
+      champPrerempli = false;
+      montrer('ecran-ferme');
+      return;
+    }
+
     var m = Transport.moi();
 
     if (!m || m.ancien) {
