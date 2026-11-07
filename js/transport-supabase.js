@@ -125,6 +125,15 @@
         cache.joueurs.push({ id: m.new.id, nom: m.new.nom });
         prevenir('joueurs');
       })
+      /* Les evenements DELETE n'emportent que la cle primaire : impossible
+         de les filtrer sur partie_id, on reconnait donc la ligne a son id. */
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'joueurs' }, function (m) {
+        var id = m.old && m.old.id;
+        if (!id) return;
+        var avant = cache.joueurs.length;
+        cache.joueurs = cache.joueurs.filter(function (j) { return j.id !== id; });
+        if (cache.joueurs.length !== avant) prevenir('joueurs');
+      })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'votes', filter: f }, function (m) {
         if (rangerVote(m.new)) {
           cache.votes[m.new.question].sort(function (a, b) { return a.ms - b.ms; });
@@ -177,16 +186,31 @@
 
   function estConsole() { return (abonnes.votes || []).length > 0; }
 
+  /* L'instant ou CE telephone s'est inscrit. Son insertion met un instant a
+     revenir de la base ; sans ce delai de grace, le sondage le trouverait
+     absent de la liste et le renverrait a l'ecran du prenom. */
+  var inscriptionLocaleA = 0;
+
+  function cleListe(l) {
+    return l.map(function (j) { return j.id; }).sort().join('|');
+  }
+
+  /* On remplace la liste au lieu de la completer : c'est ce qui fait
+     redescendre jusqu'aux telephones un joueur retire depuis la console. */
   function rattraperJoueurs() {
     sb.from('joueurs').select('*').eq('partie_id', partieSuivie).order('rejoint_a')
       .then(function (r) {
-        var neufs = 0;
-        (r.data || []).forEach(function (j) {
-          if (cache.joueurs.some(function (x) { return x.id === j.id; })) return;
-          cache.joueurs.push({ id: j.id, nom: j.nom });
-          neufs++;
-        });
-        if (neufs) prevenir('joueurs');
+        if (!r || !r.data) return;
+        var liste = r.data.map(function (j) { return { id: j.id, nom: j.nom }; });
+        if (Date.now() - inscriptionLocaleA < 8000) {
+          cache.joueurs.forEach(function (j) {
+            if (!liste.some(function (x) { return x.id === j.id; })) liste.push(j);
+          });
+        }
+        if (cleListe(cache.joueurs) !== cleListe(liste)) {
+          cache.joueurs = liste;
+          prevenir('joueurs');
+        }
       }, function () {});
   }
 
@@ -313,10 +337,16 @@
     rejoindre: function (nom) {
       nom = String(nom || '').trim().slice(0, 18);
       if (!nom) return null;
+      /* Sans partie ouverte, l'insertion partirait avec un partie_id vide et
+         serait refusee par la base. Mieux vaut le dire tout de suite. */
+      if (!cache.etat.partieId) {
+        return { erreur: 'La partie n\'est pas encore ouverte. Attends le QR code au mur.' };
+      }
       if (cache.joueurs.some(function (j) { return j.nom.toLowerCase() === nom.toLowerCase(); })) {
         return { erreur: 'Ce prénom est déjà pris. Ajoute une initiale.' };
       }
       var joueur = { id: 'j' + Date.now() + Math.floor(Math.random() * 1000), nom: nom };
+      inscriptionLocaleA = Date.now();
       cache.joueurs.push(joueur);
       prevenir('joueurs');
       try { sessionStorage.setItem(CLE_MOI, JSON.stringify({ id: joueur.id, nom: joueur.nom, partieId: cache.etat.partieId })); } catch (e) {}
@@ -342,6 +372,22 @@
     },
 
     oublierMoi: function () { try { sessionStorage.removeItem(CLE_MOI); } catch (e) {} },
+
+    /* Le maitre du jeu retire un inscrit depuis la console. Le telephone
+       concerne repasse tout seul a l'ecran du prenom : moi() ne retrouve
+       plus son identifiant dans la liste. */
+    retirerJoueur: function (id) {
+      var avant = cache.joueurs.length;
+      cache.joueurs = cache.joueurs.filter(function (j) { return j.id !== id; });
+      if (cache.joueurs.length !== avant) prevenir('joueurs');
+      sb.from('joueurs').delete().eq('id', id).then(function (r) {
+        if (r && r.error) {
+          console.error('Suppression refusee', r.error);
+          alert('Ce joueur n\'a pas pu etre retire :\n\n' + r.error.message);
+        }
+      });
+      return true;
+    },
 
     joueurs: function () { return cache.joueurs; },
 

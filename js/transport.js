@@ -131,6 +131,19 @@
 
     oublierMoi: function () { try { sessionStorage.removeItem(CLE_MOI); } catch (e) {} },
 
+    /* Le maitre du jeu retire un inscrit depuis la console : un prenom
+       entre deux fois, quelqu'un qui s'est trompe. Le telephone concerne
+       repasse de lui-meme a l'ecran du prenom, puisque moi() ne retrouve
+       plus son identifiant dans la liste. */
+    retirerJoueur: function (id) {
+      var d = lire();
+      var avant = d.joueurs.length;
+      d.joueurs = d.joueurs.filter(function (j) { return j.id !== id; });
+      if (d.joueurs.length === avant) return false;
+      ecrire(d, 'joueurs');
+      return true;
+    },
+
     joueurs: function () { return lire().joueurs; },
 
     /* Le prenom de la derniere partie jouee sur ce telephone. Survit a la
