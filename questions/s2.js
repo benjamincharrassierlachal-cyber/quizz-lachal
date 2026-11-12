@@ -1,5 +1,5 @@
 /* QUESTIONNAIRE S2 — transcrit depuis questionnaire.xlsx (2 septembre 2026).
-   9 questions ; il en manque 2 que tu ajouteras.
+   9 questions. Le questionnaire est arrete : on en reste la.
 
    Champ "propositions" : exactement 4, dans l'ordre A, B, C, D. Chacune est un
    texte, ou une LISTE de lignes — elle s'affiche alors en colonne numerotee,
