@@ -1253,6 +1253,16 @@
       if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(function(){});
       else document.exitFullscreen();
     }
+    /* « A » comme annuler. Une fois la partie lancee, le bouton Annuler a
+       disparu avec l'ecran d'inscription : c'est la seule sortie de secours
+       en cas de faux depart. Escape n'aurait pas convenu, cette touche sert
+       deja a quitter le plein ecran. Confirmation obligatoire : pas de
+       retour a l'accueil par megarde devant toute la salle. */
+    if ((ev.key === 'a' || ev.key === 'A') && e.phase !== 'accueil') {
+      if (confirm('Annuler la partie en cours et revenir \u00e0 l\u2019accueil ?')) {
+        Transport.reinitialiser();
+      }
+    }
   });
 
   function demarrer() {
