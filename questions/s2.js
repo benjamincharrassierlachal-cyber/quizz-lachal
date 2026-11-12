@@ -27,16 +27,16 @@ window.QUESTIONNAIRES.s2 = {
 
     /* ---------------------------------------------------------------- 1 */
     {
-      enonce: 'Quel classement de ces technologies de média correspond à l’usage actuel, 1 etant le moins utilisé et 4 le plus ?',
-      /* Une proposition peut etre une liste : elle s'affiche alors en colonne
-         numerotee, bien plus lisible qu'un classement ecrit sur une ligne. */
+      /* Version simplifiee : le classement a quatre lignes perdait la salle.
+         Une seule chose a trouver, quatre reponses d'un mot. */
+      enonce: 'Quelle technologie de média télévisé est la plus utilisée aujourd’hui ?',
       propositions: [
-        ['Les DVD', 'La TNT', 'Le satellite', 'Le streaming'],
-        ['Le satellite', 'Le streaming', 'DVD et Blu-ray', 'La TNT'],
-        ['Le satellite', 'DVD et Blu-ray', 'La TNT', 'Le streaming'],
-        ['La TNT', 'Le satellite', 'Le streaming', 'DVD et Blu-ray']
+        'Le DVD',
+        'La TNT',
+        'La télévision par satellite',
+        'Le streaming'
       ],
-      bonnes: ['C'],
+      bonnes: ['D'],
       explication: {
         image: 'assets/q1-medias.jpg',
         imagePleine: true,
