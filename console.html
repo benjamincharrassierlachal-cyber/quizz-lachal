@@ -510,7 +510,18 @@
     return Math.max(240, Math.min(Math.round(c), 680));
   }
 
+  /* Pendant que les telephones s'inscrivent, on prend de l'avance : le
+     chrono et le premier morceau du fond seront prets au GO. */
+  function prechargerLaPartie() {
+    ['chrono', 'fond'].forEach(function (nom) {
+      var a = musiques[nom] && musiques[nom].morceaux[0];
+      /* Jamais sur un morceau entame : load() le ramenerait a zero. */
+      if (a && a.paused && !a.currentTime) { a.preload = 'auto'; a.load(); }
+    });
+  }
+
   function preparerInscription() {
+    prechargerLaPartie();
     var url = (CONFIG.URL_PUBLIQUE || '').trim();
     $('qr').innerHTML = '';
     if (url) {
@@ -1176,8 +1187,13 @@
   function construireMusiques() {
     Object.keys(PISTES).forEach(function (nom) {
       var morceaux = PISTES[nom].map(function (src, i) {
-        var a = new Audio(src);
+        /* L'ordre compte : « new Audio(src) » demande le fichier aussitot,
+           avant qu'on ait pu dire preload="none". On cree donc l'element
+           vide, on regle, et on donne la source en dernier. Sinon la page
+           reclame vingt-deux megaoctets des son ouverture. */
+        var a = new Audio();
         a.preload = (i === 0) ? 'auto' : 'none';
+        a.src = src;
         a.volume = 0;
         a.addEventListener('ended', function () {
           if (nom === 'chrono') return;          // le chrono s'arrete avec le temps
