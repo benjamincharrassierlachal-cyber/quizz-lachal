@@ -37,5 +37,10 @@ window.CONFIG = {
      ceci ne sert qu'a rattraper une websocket coupee ou un telephone qui
      sort de veille. Ne pas descendre sous 1500 : chaque telephone
      interroge la base a cette cadence. */
-  CADENCE_SONDAGE_MS: 2500
+  CADENCE_SONDAGE_MS: 2500,
+
+  /* Le volume de la musique sur la console, entre 0 et 1. Les trois pistes
+     ont deja ete mises a niveau entre elles ; ce reglage les monte ou les
+     descend ensemble. La touche M coupe et retablit le son en direct. */
+  VOLUME_MUSIQUE: 0.55
 };
