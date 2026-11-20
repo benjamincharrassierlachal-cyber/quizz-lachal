@@ -1131,8 +1131,126 @@
   /* ---------- le chef d'orchestre ---------- */
   var phasePrecedente = null, qiPrecedent = -2;
 
+  /* ======================= la musique =======================
+     Trois ambiances : le menu et les classements, le fond des questions et
+     des reponses, le compte a rebours. Elles ne vivent que sur la console —
+     le telephone reste muet, c'est une telecommande, pas un haut-parleur.
+
+     Le fond dure vingt et une minutes. Il est decoupe en trois morceaux
+     pour qu'aucun fichier ne soit lourd a telecharger ; ils s'enchainent et
+     reviennent au premier. Quand le chrono prend la main, le fond se met en
+     pause et reprend plus tard la ou il s'etait arrete.
+
+     Les trois pistes ont ete ramenees a des niveaux comparables, le chrono
+     trois decibels au-dessus du fond : le compte a rebours se leve tout
+     seul sans qu'on touche au volume de la salle. */
+  var PISTES = {
+    menu:   ['sons/menu.mp3'],
+    fond:   ['sons/fond-1.mp3', 'sons/fond-2.mp3', 'sons/fond-3.mp3'],
+    chrono: ['sons/chrono.mp3']
+  };
+  /* « ferme » garde le chrono : c'est la seconde ou le temps vient d'expirer,
+     autant laisser la piste finir sa phrase avant la revelation. */
+  var PISTE_DE_PHASE = {
+    accueil: 'menu', inscription: 'menu', top: 'menu', final: 'menu', journee: 'menu',
+    lecture: 'fond', revelation: 'fond', explication: 'fond',
+    vote: 'chrono', ferme: 'chrono'
+  };
+
+  var VOLUME_MUSIQUE = (CONFIG.VOLUME_MUSIQUE == null) ? 0.55 : CONFIG.VOLUME_MUSIQUE;
+  var musiques = {};
+  var pisteCourante = null;
+  var musiqueCoupee = false;
+  var gesteAttendu = false;
+
+  function fondre(audio, vers, duree, fin) {
+    clearInterval(audio.fondu);
+    var depart = audio.volume, t0 = Date.now();
+    audio.fondu = setInterval(function () {
+      var k = Math.min(1, (Date.now() - t0) / duree);
+      audio.volume = Math.max(0, Math.min(1, depart + (vers - depart) * k));
+      if (k >= 1) { clearInterval(audio.fondu); if (fin) fin(); }
+    }, 40);
+  }
+
+  function construireMusiques() {
+    Object.keys(PISTES).forEach(function (nom) {
+      var morceaux = PISTES[nom].map(function (src, i) {
+        var a = new Audio(src);
+        a.preload = (i === 0) ? 'auto' : 'none';
+        a.volume = 0;
+        a.addEventListener('ended', function () {
+          if (nom === 'chrono') return;          // le chrono s'arrete avec le temps
+          musiques[nom].index = (i + 1) % morceaux.length;
+          if (pisteCourante === nom) jouerPiste(nom);
+        });
+        return a;
+      });
+      musiques[nom] = { morceaux: morceaux, index: 0, prechargee: false };
+    });
+  }
+
+  function morceauCourant(nom) {
+    var m = musiques[nom];
+    return m && m.morceaux[m.index];
+  }
+
+  /* Les navigateurs refusent le son tant que personne n'a touche la page.
+     On retente donc au premier clic ou a la premiere touche. */
+  function attendreUnGeste() {
+    if (gesteAttendu) return;
+    gesteAttendu = true;
+    var reprendre = function () {
+      document.removeEventListener('click', reprendre);
+      document.removeEventListener('keydown', reprendre);
+      gesteAttendu = false;
+      if (pisteCourante) jouerPiste(pisteCourante);
+    };
+    document.addEventListener('click', reprendre);
+    document.addEventListener('keydown', reprendre);
+  }
+
+  function jouerPiste(nom) {
+    var m = musiques[nom], a = morceauCourant(nom);
+    if (!a) return;
+    if (nom === 'chrono') { try { a.currentTime = 0; } catch (e) {} }
+    /* Les morceaux suivants ne sont charges qu'au premier passage : la page
+       s'ouvre sans attendre vingt megaoctets. */
+    if (!m.prechargee) {
+      m.prechargee = true;
+      m.morceaux.forEach(function (x) {
+        if (x !== a && x.preload === 'none') { x.preload = 'auto'; x.load(); }
+      });
+    }
+    a.volume = 0;
+    var promesse = a.play();
+    if (promesse && promesse.catch) promesse.catch(attendreUnGeste);
+    fondre(a, musiqueCoupee ? 0 : VOLUME_MUSIQUE, 600);
+  }
+
+  function reglerMusique(phase) {
+    var voulue = PISTE_DE_PHASE[phase] || 'menu';
+    if (voulue === pisteCourante) return;
+    var avant = pisteCourante;
+    pisteCourante = voulue;
+    if (avant) {
+      var vieux = morceauCourant(avant);
+      if (vieux) fondre(vieux, 0, 300, function () { vieux.pause(); });
+    }
+    jouerPiste(voulue);
+  }
+
+  function basculerMusique() {
+    musiqueCoupee = !musiqueCoupee;
+    var a = pisteCourante && morceauCourant(pisteCourante);
+    if (a) fondre(a, musiqueCoupee ? 0 : VOLUME_MUSIQUE, 250);
+  }
+
+  construireMusiques();
+
   function peindre() {
     var e = Transport.etat();
+    reglerMusique(e.phase);
     if (e.questionnaire && !questionnaire) questionnaire = QUESTIONNAIRES[e.questionnaire];
     var nouvellePhase = (e.phase !== phasePrecedente) || (e.questionIndex !== qiPrecedent);
 
@@ -1258,6 +1376,7 @@
        en cas de faux depart. Escape n'aurait pas convenu, cette touche sert
        deja a quitter le plein ecran. Confirmation obligatoire : pas de
        retour a l'accueil par megarde devant toute la salle. */
+    if (ev.key === 'm' || ev.key === 'M') basculerMusique();
     if ((ev.key === 'a' || ev.key === 'A') && e.phase !== 'accueil') {
       if (confirm('Annuler la partie en cours et revenir \u00e0 l\u2019accueil ?')) {
         Transport.reinitialiser();
