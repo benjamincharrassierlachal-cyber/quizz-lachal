@@ -1169,6 +1169,18 @@
   };
 
   var VOLUME_MUSIQUE = (CONFIG.VOLUME_MUSIQUE == null) ? 0.55 : CONFIG.VOLUME_MUSIQUE;
+  /* Le fond n'est la que pour meubler : il passe sous le menu et le chrono,
+     pour ne jamais couvrir ce qui se dit dans la salle. Un facteur a part,
+     pour le baisser sans toucher aux deux autres. */
+  var NIVEAUX = {
+    menu: 1,
+    chrono: 1,
+    fond: (CONFIG.VOLUME_FOND == null) ? 0.5 : CONFIG.VOLUME_FOND
+  };
+  function volumeDe(nom) {
+    var k = NIVEAUX[nom];
+    return VOLUME_MUSIQUE * (k == null ? 1 : k);
+  }
   var musiques = {};
   var pisteCourante = null;
   var musiqueCoupee = false;
@@ -1241,7 +1253,7 @@
     a.volume = 0;
     var promesse = a.play();
     if (promesse && promesse.catch) promesse.catch(attendreUnGeste);
-    fondre(a, musiqueCoupee ? 0 : VOLUME_MUSIQUE, 600);
+    fondre(a, musiqueCoupee ? 0 : volumeDe(nom), 600);
   }
 
   function reglerMusique(phase) {
@@ -1259,7 +1271,7 @@
   function basculerMusique() {
     musiqueCoupee = !musiqueCoupee;
     var a = pisteCourante && morceauCourant(pisteCourante);
-    if (a) fondre(a, musiqueCoupee ? 0 : VOLUME_MUSIQUE, 250);
+    if (a) fondre(a, musiqueCoupee ? 0 : volumeDe(pisteCourante), 250);
   }
 
   construireMusiques();
