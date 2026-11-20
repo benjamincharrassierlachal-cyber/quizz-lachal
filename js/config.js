@@ -42,5 +42,11 @@ window.CONFIG = {
   /* Le volume de la musique sur la console, entre 0 et 1. Les trois pistes
      ont deja ete mises a niveau entre elles ; ce reglage les monte ou les
      descend ensemble. La touche M coupe et retablit le son en direct. */
-  VOLUME_MUSIQUE: 0.55
+  VOLUME_MUSIQUE: 0.55,
+
+  /* Le fond des questions, en proportion du reglage ci-dessus. Il meuble,
+     il ne doit pas couvrir les voix : 0,5 le place six decibels sous le
+     menu et le chrono. Baisser vers 0,35 s'il reste trop present, remonter
+     vers 0,7 s'il disparait. */
+  VOLUME_FOND: 0.5
 };
